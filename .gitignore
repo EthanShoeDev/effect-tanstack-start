@@ -1,0 +1,7 @@
+docs/cloned-repos-as-docs/
+tmp/
+
+node_modules
+dist
+*.log
+.DS_Store

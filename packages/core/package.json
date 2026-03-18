@@ -1,17 +1,8 @@
 {
-  "name": "utils",
+  "name": "effect-tanstack-start",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
-  "bugs": {
-    "url": "https://github.com/author/library/issues"
-  },
+  "description": "Seamlessly integrate Effect-ts with TanStack Start.",
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/author/library.git"
-  },
   "files": [
     "dist"
   ],
@@ -36,5 +27,11 @@
     "bumpp": "^11.0.1",
     "typescript": "^5.9.3",
     "vite-plus": "^0.1.11"
+  },
+  "peerDependencies": {
+    "@tanstack/react-router": ">=1.0.0",
+    "@tanstack/react-start": ">=1.0.0",
+    "effect": ">=3.0.0",
+    "react": ">=19.0.0"
   }
 }

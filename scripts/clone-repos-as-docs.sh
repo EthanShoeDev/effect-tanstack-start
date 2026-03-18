@@ -17,8 +17,6 @@ gh repo clone Effect-TS/website
 gh repo clone kitlangton/effect-solutions
 gh repo clone voidhashcom/effect-query
 gh repo clone mcrovero/effect-nextjs # This provides good examples on how to use ManagedRuntimes.
-gh repo clone PaulJPhilp/EffectPatterns
-gh repo clone Makisuo/skills # bunx skills add makisuo/skills/effect-best-practices
 
 # Reference
 gh repo clone voidzero-dev/vite-plus

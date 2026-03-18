@@ -35,6 +35,8 @@ effect-ts with an isomorphic web framework. One key insight it offers is that yo
 both a server and client effect-ts ManagedRuntime. This allows you to cleanly seperate server
 and client services and provide them where you need.
 
+Also integrating effect-ts with tanstack query is non-trivial. That is the entire reason why voidhashcom/effect-query exists. We need to make sure we integrate nicely with it.
+
 Some future goals of this library:
 
 - Allow the user to define a route loader using an effect-ts generator function.

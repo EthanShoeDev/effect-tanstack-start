@@ -13,7 +13,7 @@
     "target": "ES2022",
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "~/*": ["./src/*"]
+      "@/*": ["./src/*"]
     },
     "noEmit": true
   }

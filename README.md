@@ -1,4 +1,5 @@
 > Heavily inspired/influenced by:
+>
 > - [effect-nextjs](https://github.com/mcrovero/effect-nextjs)
 > - [voidhashcom/effect-query](https://github.com/voidhashcom/effect-query)
 
@@ -10,6 +11,7 @@ This function behind the scenes becomes an HTTP endpoint.
 Tanstack start provides a helper `useServerFn` to call these from react components but they can reall be called from anywhere.
 
 Tanstack start server functions can be called from:
+
 - route loaders
 - components
 - imperative clientside code
@@ -22,29 +24,28 @@ A user of both tanstack start and effect-ts could define an `HttpApi` and then m
 a tanstack start api splat route. You can use the effect-ts `toWebHandler` to properly mount
 the effect-ts HttpApi on the tanstack start api splat route.
 
-It is easy to call this from the client side with the derived http client. 
-It is not easy to make it so the effect-ts http api endpoints can be called seamlessly from 
+It is easy to call this from the client side with the derived http client.
+It is not easy to make it so the effect-ts http api endpoints can be called seamlessly from
 route loaders or at ssr time without wrapping each endpoint in a `createServerFn` (effectively creating duplicate http endpoints at deployment time).
 
 This library is meant to solve this problem.
 
-The effect-nextjs library provides some helpful guidance on the best way to integrate 
+The effect-nextjs library provides some helpful guidance on the best way to integrate
 effect-ts with an isomorphic web framework. One key insight it offers is that you should define
 both a server and client effect-ts ManagedRuntime. This allows you to cleanly seperate server
 and client services and provide them where you need.
 
 Some future goals of this library:
+
 - Allow the user to define a route loader using an effect-ts generator function.
 - Allow the user to define a `createServerFn` using an effect-ts generator function (without wrapping the impl in Effect.runPromise or Runtime.runPromise).
 - Distant distant goal: Make a vite plugin that will automatically help code split an effect-ts HttpApi into multiple ssr chunks for each route. This would require tramsmuting effect-ts HttpApi routes into tanstack start api routes and tanstack start middleware.
-
 
 Relevant links:
 
 - https://www.answeroverflow.com/m/1437468752026533968
 - https://www.answeroverflow.com/m/1447246384385364082
 - https://www.reddit.com/r/tanstack/comments/1lkzbsj/seamless_integration_of_effect_httpapi_with/
-
 
 Implementation Notes:
 

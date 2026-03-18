@@ -1,5 +1,5 @@
-import * as HttpApiSchema from "@effect/platform/HttpApiSchema";
-import * as Schema from "effect/Schema";
+import { HttpApiSchema } from "@effect/platform";
+import { Schema } from "effect";
 
 export const TodoId = Schema.String.pipe(Schema.brand("TodoId"));
 export type TodoId = typeof TodoId.Type;

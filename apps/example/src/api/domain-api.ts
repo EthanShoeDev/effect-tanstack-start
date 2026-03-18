@@ -1,7 +1,5 @@
-import * as HttpApi from "@effect/platform/HttpApi";
-import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
-import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
-import * as Schema from "effect/Schema";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "@effect/platform";
+import { Schema } from "effect";
 import { CreateTodoInput, Todo, TodoId, TodoNotFound, UpdateTodoInput } from "./todo-schema";
 
 export class TodosApiGroup extends HttpApiGroup.make("todos")

@@ -1,7 +1,4 @@
-import * as ManagedRuntime from "effect/ManagedRuntime";
-import * as Layer from "effect/Layer";
-import * as Effect from "effect/Effect";
-import * as Logger from "effect/Logger";
+import { Effect, Layer, Logger, ManagedRuntime } from "effect";
 import { globalValue } from "effect/GlobalValue";
 import { TodosService } from "@/api/todos-service";
 

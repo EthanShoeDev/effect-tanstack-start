@@ -1,6 +1,5 @@
-import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
-import * as Layer from "effect/Layer";
-import * as Effect from "effect/Effect";
+import { HttpApiBuilder } from "@effect/platform";
+import { Effect, Layer } from "effect";
 import { DomainApi } from "./domain-api";
 import { TodosService } from "./todos-service";
 

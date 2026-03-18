@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
+import { Effect, Option } from "effect";
 import { useState } from "react";
-import { ApiClient, clientRuntime } from "@/client-runtime";
+import { ApiClient } from "@/api-client/shared";
+import { clientRuntime } from "@/client-runtime";
 
 export const Route = createFileRoute("/")({
   component: Todos,
@@ -17,8 +17,8 @@ function Todos() {
     setLoading(true);
     const result = await clientRuntime.runPromise(
       Effect.gen(function* () {
-        const { client } = yield* ApiClient;
-        return yield* client.todos.list();
+        const api = yield* ApiClient;
+        return yield* api.todos.list();
       }),
     );
     setTodos(result.map((t) => ({ id: t.id, title: t.title, completed: t.completed })));
@@ -29,8 +29,8 @@ function Todos() {
     if (!title.trim()) return;
     await clientRuntime.runPromise(
       Effect.gen(function* () {
-        const { client } = yield* ApiClient;
-        yield* client.todos.create({ payload: { title } });
+        const api = yield* ApiClient;
+        yield* api.todos.create({ payload: { title } });
       }),
     );
     setTitle("");
@@ -40,8 +40,8 @@ function Todos() {
   const toggleTodo = async (id: string, completed: boolean) => {
     await clientRuntime.runPromise(
       Effect.gen(function* () {
-        const { client } = yield* ApiClient;
-        yield* client.todos.update({
+        const api = yield* ApiClient;
+        yield* api.todos.update({
           path: { id: id as never },
           payload: { title: Option.none(), completed: Option.some(!completed) },
         });
@@ -53,8 +53,8 @@ function Todos() {
   const deleteTodo = async (id: string) => {
     await clientRuntime.runPromise(
       Effect.gen(function* () {
-        const { client } = yield* ApiClient;
-        yield* client.todos.remove({ path: { id: id as never } });
+        const api = yield* ApiClient;
+        yield* api.todos.remove({ path: { id: id as never } });
       }),
     );
     await fetchTodos();

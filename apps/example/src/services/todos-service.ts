@@ -2,18 +2,19 @@ import { DateTime, Effect, Option, Ref } from "effect";
 import {
   type CreateTodoInput,
   type Todo,
-  type TodoId,
   TodoNotFound,
   type UpdateTodoInput,
-} from "./todo-schema";
+} from "@/api/api-contract";
 
 export class TodosService extends Effect.Service<TodosService>()("TodosService", {
   effect: Effect.gen(function* () {
-    const todosRef = yield* Ref.make<Map<TodoId, Todo>>(new Map());
+    const todosRef = yield* Ref.make<Map<string, Todo>>(new Map());
+    // We can grep the client bundle to ensure this string is not included.
+    const superSecretString = "SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET";
 
-    const generateId = (): TodoId => {
+    const generateId = () => {
       const id = crypto.randomUUID();
-      return id as TodoId;
+      return id;
     };
 
     const list = Effect.gen(function* () {
@@ -21,8 +22,9 @@ export class TodosService extends Effect.Service<TodosService>()("TodosService",
       return Array.from(todos.values());
     });
 
-    const getById = (id: TodoId) =>
+    const getById = (id: string) =>
       Effect.gen(function* () {
+        yield* Effect.log(superSecretString);
         const todos = yield* Ref.get(todosRef);
         const todo = todos.get(id);
         if (!todo) {
@@ -49,7 +51,7 @@ export class TodosService extends Effect.Service<TodosService>()("TodosService",
         return todo;
       });
 
-    const update = (id: TodoId, input: UpdateTodoInput) =>
+    const update = (id: string, input: UpdateTodoInput) =>
       Effect.gen(function* () {
         const existing = yield* getById(id);
         const updated: Todo = {
@@ -65,7 +67,7 @@ export class TodosService extends Effect.Service<TodosService>()("TodosService",
         return updated;
       });
 
-    const remove = (id: TodoId) =>
+    const remove = (id: string) =>
       Effect.gen(function* () {
         yield* getById(id);
         yield* Ref.update(todosRef, (todos) => {

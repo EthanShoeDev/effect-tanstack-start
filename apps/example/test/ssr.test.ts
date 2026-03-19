@@ -1,14 +1,11 @@
 import { beforeAll, describe, expect, it } from "@effect/vitest";
 import { Command } from "@effect/platform";
-import { layer as NodeCommandExecutor } from "@effect/platform-node-shared/NodeCommandExecutor";
-import { layer as NodeFileSystem } from "@effect/platform-node-shared/NodeFileSystem";
-import { Effect, Layer, Schedule } from "effect";
+import { NodeContext } from "@effect/platform-node";
+import { Effect, Schedule } from "effect";
 
 const PORT = 3456;
 const BASE_URL = `http://localhost:${PORT}`;
 const APP_DIR = import.meta.dirname + "/..";
-
-const CommandLive = NodeCommandExecutor.pipe(Layer.provideMerge(NodeFileSystem));
 
 describe("SSR", () => {
   beforeAll(async () => {
@@ -18,7 +15,7 @@ describe("SSR", () => {
       Command.stdout("inherit"),
       Command.stderr("inherit"),
       Command.exitCode,
-      Effect.provide(CommandLive),
+      Effect.provide(NodeContext.layer),
       Effect.runPromise,
     );
     if (exitCode !== 0) throw new Error(`Build failed with exit code ${exitCode}`);
@@ -62,7 +59,26 @@ describe("SSR", () => {
         expect(html).toContain("Buy milk");
 
         yield* server.kill("SIGKILL");
-      }).pipe(Effect.scoped, Effect.provide(CommandLive)),
+      }).pipe(Effect.scoped, Effect.provide(NodeContext.layer)),
     60_000,
+  );
+
+  it.live(
+    "client bundle does not contain server-only code",
+    () =>
+      Effect.gen(function* () {
+        // Use rg (ripgrep) to search the client bundle for server-only strings.
+        // Exit code 0 = match found (bad), exit code 1 = no match (good).
+        const clientDir = `${APP_DIR}/.output/public/assets`;
+        const exitCode = yield* Command.make(
+          "rg",
+          "--no-filename",
+          "SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET",
+          clientDir,
+        ).pipe(Command.exitCode);
+
+        expect(exitCode).toBe(1); // 1 = no matches found
+      }).pipe(Effect.provide(NodeContext.layer)),
+    30_000,
   );
 });

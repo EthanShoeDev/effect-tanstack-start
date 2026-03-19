@@ -1,6 +1,9 @@
 import { expect, test } from "vite-plus/test";
-import { fn } from "../src";
+import { makeApiClientTag, makeSsrApiClientLayer, makeHttpApiClientLayer, mountApi } from "../src";
 
-test("fn", () => {
-  expect(fn()).toBe("Hello, tsdown!");
+test("exports are functions", () => {
+  expect(typeof makeApiClientTag).toBe("function");
+  expect(typeof makeSsrApiClientLayer).toBe("function");
+  expect(typeof makeHttpApiClientLayer).toBe("function");
+  expect(typeof mountApi).toBe("function");
 });

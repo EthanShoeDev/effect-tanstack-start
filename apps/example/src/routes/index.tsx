@@ -1,81 +1,42 @@
 import { createFileRoute, useLoaderData } from "@tanstack/react-router";
-import { createIsomorphicFn } from "@tanstack/react-start";
-import { Effect, Option } from "effect";
+import { Option } from "effect";
 import { useState } from "react";
-import { ApiClient } from "@/api-client/shared";
-import { clientRuntime } from "@/client-runtime";
-
-// createIsomorphicFn selects the runtime at compile time.
-// Server: uses serverRuntime (in-process ApiClient, no HTTP).
-// Client: uses clientRuntime (HTTP-based ApiClient).
-const getRuntime = createIsomorphicFn()
-  .server(async () => {
-    const { serverRuntime } = await import("@/server-runtime");
-    return serverRuntime;
-  })
-  .client(() => clientRuntime);
+import { callApiPromise } from "@/effect-tanstack";
 
 export const Route = createFileRoute("/")({
-  loader: async () => {
-    const runtime = await getRuntime();
-    const todos = await runtime.runPromise(
-      Effect.gen(function* () {
-        const api = yield* ApiClient;
-        return yield* api.todos.list();
-      }),
-    );
-    return { todos: todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })) };
-  },
+  loader: () => callApiPromise((api) => api.todos.list()),
   component: Todos,
 });
 
 function Todos() {
-  const { todos: initialTodos } = useLoaderData({ from: "/" });
+  const initialTodos = useLoaderData({ from: "/" });
   const [todos, setTodos] = useState(initialTodos);
   const [title, setTitle] = useState("");
 
   const fetchTodos = async () => {
-    const result = await clientRuntime.runPromise(
-      Effect.gen(function* () {
-        const api = yield* ApiClient;
-        return yield* api.todos.list();
-      }),
-    );
-    setTodos(result.map((t) => ({ id: t.id, title: t.title, completed: t.completed })));
+    const result = await callApiPromise((api) => api.todos.list());
+    setTodos(result);
   };
 
   const addTodo = async () => {
     if (!title.trim()) return;
-    await clientRuntime.runPromise(
-      Effect.gen(function* () {
-        const api = yield* ApiClient;
-        yield* api.todos.create({ payload: { title } });
-      }),
-    );
+    await callApiPromise((api) => api.todos.create({ payload: { title } }));
     setTitle("");
     await fetchTodos();
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
-    await clientRuntime.runPromise(
-      Effect.gen(function* () {
-        const api = yield* ApiClient;
-        yield* api.todos.update({
-          path: { id: id as never },
-          payload: { title: Option.none(), completed: Option.some(!completed) },
-        });
+    await callApiPromise((api) =>
+      api.todos.update({
+        path: { id: id },
+        payload: { title: Option.none(), completed: Option.some(!completed) },
       }),
     );
     await fetchTodos();
   };
 
   const deleteTodo = async (id: string) => {
-    await clientRuntime.runPromise(
-      Effect.gen(function* () {
-        const api = yield* ApiClient;
-        yield* api.todos.remove({ path: { id: id as never } });
-      }),
-    );
+    await callApiPromise((api) => api.todos.remove({ path: { id: id } }));
     await fetchTodos();
   };
 

@@ -63,11 +63,13 @@ export function makeSsrApiClientLayer<
     const runtime = yield* Scope.extend(Layer.toRuntime(fullLayer), scope);
     const apiContext = runtime.context as Context.Context<any>;
 
-    // Extract the router from the built runtime — it has all the routes.
-    const router: HttpRouter.HttpRouter<any, any> = Context.unsafeGet(
+    // Extract the Router service, then get the actual HttpRouter from it.
+    // The Router tag provides a Service with a .router Effect, not the HttpRouter directly.
+    const routerService = Context.unsafeGet(apiContext, HttpApiBuilder.Router as any);
+    const router: HttpRouter.HttpRouter<any, any> = (yield* Effect.provide(
+      (routerService as any).router,
       apiContext,
-      HttpApiBuilder.Router as any,
-    );
+    )) as HttpRouter.HttpRouter<any, any>;
 
     // Index routes by "METHOD path" for direct lookup
     const routeIndex = new Map<string, HttpRouter.Route<any, any>>();

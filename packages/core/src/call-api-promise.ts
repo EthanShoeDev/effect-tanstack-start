@@ -13,6 +13,7 @@ import { Context, Effect, type ManagedRuntime } from "effect";
  *
  * @param clientTag - The ApiClient tag (from makeApiClientTag)
  * @param getRuntime - An isomorphic function returning the correct runtime
+ *   (may return the runtime directly or a Promise of it)
  *
  * @example
  * ```ts
@@ -24,8 +25,16 @@ import { Context, Effect, type ManagedRuntime } from "effect";
  */
 export function makeCallApiPromise<TagId, TagService>(
   clientTag: Context.Tag<TagId, TagService>,
-  getRuntime: () => ManagedRuntime.ManagedRuntime<any, any>,
+  getRuntime: () =>
+    | ManagedRuntime.ManagedRuntime<any, any>
+    | Promise<ManagedRuntime.ManagedRuntime<any, any>>,
 ): <A, E>(fn: (client: TagService) => Effect.Effect<A, E, any>) => Promise<A> {
-  return <A, E>(fn: (client: TagService) => Effect.Effect<A, E, any>): Promise<A> =>
-    getRuntime().runPromise(Effect.flatMap(clientTag, fn) as Effect.Effect<A, E, never>);
+  return <A, E>(fn: (client: TagService) => Effect.Effect<A, E, any>): Promise<A> => {
+    const runtimeOrPromise = getRuntime();
+    const effect = Effect.flatMap(clientTag, fn) as Effect.Effect<A, E, never>;
+    if (runtimeOrPromise instanceof Promise) {
+      return runtimeOrPromise.then((runtime) => runtime.runPromise(effect));
+    }
+    return runtimeOrPromise.runPromise(effect);
+  };
 }

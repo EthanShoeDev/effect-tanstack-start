@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "@effect/vitest";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { Command } from "@effect/platform";
 import { NodeContext } from "@effect/platform-node";
 import { Effect, Schedule } from "effect";
@@ -7,8 +7,19 @@ const PORT = 3456;
 const BASE_URL = `http://localhost:${PORT}`;
 const APP_DIR = import.meta.dirname + "/..";
 
+function killPort() {
+  return Command.make("sh", "-c", `lsof -t -i:${PORT} | xargs -r kill -9`).pipe(
+    Command.exitCode,
+    Effect.ignore,
+    Effect.provide(NodeContext.layer),
+    Effect.runPromise,
+  );
+}
+
 describe("SSR", () => {
   beforeAll(async () => {
+    await killPort();
+
     const exitCode = await Command.make("vp", "build").pipe(
       Command.workingDirectory(APP_DIR),
       Command.env({ VITEST: "", NODE_ENV: "production" }),
@@ -20,6 +31,10 @@ describe("SSR", () => {
     );
     if (exitCode !== 0) throw new Error(`Build failed with exit code ${exitCode}`);
   }, 120_000);
+
+  afterAll(async () => {
+    await killPort();
+  });
 
   it.live(
     "HTML contains server-rendered content",
@@ -67,8 +82,6 @@ describe("SSR", () => {
     "client bundle does not contain server-only code",
     () =>
       Effect.gen(function* () {
-        // Use rg (ripgrep) to search the client bundle for server-only strings.
-        // Exit code 0 = match found (bad), exit code 1 = no match (good).
         const clientDir = `${APP_DIR}/.output/public/assets`;
         const exitCode = yield* Command.make(
           "rg",

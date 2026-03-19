@@ -6,6 +6,9 @@ import { nitro } from "nitro/vite";
 import path from "path";
 
 export default defineConfig({
+  build: {
+    minify: false,
+  },
   server: {
     port: 3000,
   },

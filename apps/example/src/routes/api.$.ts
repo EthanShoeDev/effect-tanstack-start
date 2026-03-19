@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { mountApi } from "effect-tanstack-start";
-import { ApiContract } from "@/api/api-contract";
-import { ApiImplLive } from "@/api/api-impl";
-import { serverRuntime } from "@/effect-tanstack";
+import { apiHandler } from "@/runtimes/server-runtime.server";
 
-export const Route = createFileRoute("/api/$")(
-  mountApi(ApiContract, {
-    serverRuntime,
-    apiLayer: ApiImplLive,
-  }),
-);
+export const Route = createFileRoute("/api/$")({
+  server: {
+    handlers: {
+      GET: apiHandler,
+      POST: apiHandler,
+      PUT: apiHandler,
+      PATCH: apiHandler,
+      DELETE: apiHandler,
+      OPTIONS: apiHandler,
+    },
+  },
+});

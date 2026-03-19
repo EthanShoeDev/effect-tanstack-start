@@ -1,7 +1,7 @@
 import { createFileRoute, useLoaderData } from "@tanstack/react-router";
 import { Option } from "effect";
 import { useState } from "react";
-import { callApiPromise } from "@/effect-tanstack";
+import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/")({
   loader: () => callApiPromise((api) => api.todos.list()),
@@ -28,7 +28,7 @@ function Todos() {
   const toggleTodo = async (id: string, completed: boolean) => {
     await callApiPromise((api) =>
       api.todos.update({
-        path: { id: id },
+        path: { id },
         payload: { title: Option.none(), completed: Option.some(!completed) },
       }),
     );
@@ -36,7 +36,7 @@ function Todos() {
   };
 
   const deleteTodo = async (id: string) => {
-    await callApiPromise((api) => api.todos.remove({ path: { id: id } }));
+    await callApiPromise((api) => api.todos.remove({ path: { id } }));
     await fetchTodos();
   };
 

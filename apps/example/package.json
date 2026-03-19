@@ -7,7 +7,8 @@
     "dev": "vp dev",
     "build": "vp build && tsc --noEmit",
     "preview": "vp preview",
-    "start": "node .output/server/index.mjs"
+    "start": "node .output/server/index.mjs",
+    "test": "vp test"
   },
   "dependencies": {
     "@effect/platform": "catalog:",
@@ -19,6 +20,8 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-node-shared": "catalog:",
+    "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -26,6 +29,7 @@
     "nitro": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   }
 }

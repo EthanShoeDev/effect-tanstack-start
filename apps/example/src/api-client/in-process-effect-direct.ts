@@ -1,24 +1,22 @@
 /**
- * In-process ApiClient that calls the HttpApp Effect directly,
- * skipping the async web handler wrapper.
+ * SSR ApiClient: effect-app-direct approach.
  *
- * Instead of going through HttpApiBuilder.toWebHandler (which creates its own
- * runtime and runs the Effect asynchronously), this approach builds the HttpApp
- * from the API layer and runs it directly as an Effect.
+ * Uses HttpApiClient.makeWith with a custom HttpClient that builds the
+ * HttpApp and runs it directly as an Effect in the CALLER'S fiber.
  *
- * The flow:
- *   HttpApiClient encodes request (schema validation) →
- *   Custom HttpClient converts HttpClientRequest → HttpServerRequest (via fromWeb) →
- *   Runs HttpApp Effect directly (full HttpApi pipeline + middleware) →
- *   Converts HttpServerResponse → web Response → HttpClientResponse →
- *   HttpApiClient decodes response (schema validation)
+ * What makes this different from the web-handler approach:
+ * - Does NOT create a separate runtime/scope (toWebHandler does)
+ * - Runs the HttpApp Effect directly in the current fiber, so it shares
+ *   the caller's runtime context, tracing, interruption, etc.
+ * - Still goes through URL routing, body deserialization, middleware,
+ *   response encoding — but all as Effect operations in the current fiber
+ * - Still needs an HttpServerRequest (via fromWeb + web Request constructor)
+ *   because the HttpApp expects one in context
  *
- * Pros: Full schema contract and middleware pipeline. Avoids the toWebHandler
- *       runtime wrapper. Runs the HttpApp directly in the caller's Effect context.
- * Cons: Still converts through web Request/Response for HttpServerRequest.fromWeb.
- *       Needs investigation into direct HttpClientRequest → HttpServerRequest conversion.
- *
- * This is the "effect-direct" approach from the implementation notes.
+ * Overhead: URL parsing, JSON body serialize/deserialize, router matching,
+ *           response encoding. But no separate runtime creation.
+ * Middleware: Runs fully.
+ * Correctness: Guaranteed — same pipeline as HTTP, just in-process.
  */
 
 import { Effect, Layer } from "effect";
@@ -37,11 +35,11 @@ import { DomainApi } from "@/api/domain-api";
 import { TodosApiLive } from "@/api/todos-api-live";
 import { ApiClient } from "./shared";
 
-// Build the API layer.
 const MyApiLive = HttpApiBuilder.api(DomainApi).pipe(Layer.provide(TodosApiLive));
 const ApiLayer = Layer.mergeAll(MyApiLive, HttpServer.layerContext);
 
-// Resolve the HttpApp with full middleware pipeline.
+// Build the HttpApp once (lazily). Unlike toWebHandler, this does NOT
+// create its own runtime — it returns an Effect that runs in the caller's fiber.
 const resolvedHttpApp = Effect.gen(function* () {
   const fullLayer = ApiLayer.pipe(
     Layer.provideMerge(HttpApiBuilder.Router.Live),
@@ -52,15 +50,19 @@ const resolvedHttpApp = Effect.gen(function* () {
   return HttpMiddleware.logger(app as HttpApp.Default);
 }).pipe(Effect.scoped);
 
-// Custom HttpClient that runs the HttpApp Effect directly.
+// Custom HttpClient that runs the HttpApp Effect directly in the caller's fiber.
 const inProcessEffectClient = HttpClient.make((request, url) =>
-  Effect.gen(function* () {
+  (Effect.gen as any)(function* () {
+    // We still need a web Request to create HttpServerRequest — this is just
+    // a JS object constructor, not a network call. The HttpApp expects
+    // HttpServerRequest in its context for routing and body parsing.
     const webRequest = new Request(url.toString(), {
       method: request.method,
       headers: request.headers as Record<string, string>,
     });
     const serverRequest = HttpServerRequest.fromWeb(webRequest);
 
+    // Run the HttpApp directly — no separate runtime, same fiber
     const app = yield* resolvedHttpApp;
     const serverResponse = yield* Effect.provideService(
       app,
@@ -68,6 +70,7 @@ const inProcessEffectClient = HttpClient.make((request, url) =>
       serverRequest,
     );
 
+    // Convert response back without going through web Response
     const webResponse = HttpServerResponse.toWeb(serverResponse);
     return HttpClientResponse.fromWeb(request, webResponse);
   }),
@@ -75,8 +78,8 @@ const inProcessEffectClient = HttpClient.make((request, url) =>
 
 export const InProcessEffectDirectApiClientLive = Layer.effect(
   ApiClient,
-  HttpApiClient.make(DomainApi, {
+  HttpApiClient.makeWith(DomainApi, {
+    httpClient: inProcessEffectClient,
     baseUrl: "http://localhost",
-    transformClient: () => inProcessEffectClient,
   }),
 );

@@ -21,3 +21,4 @@ gh repo clone mcrovero/effect-nextjs # This provides good examples on how to use
 # Reference
 gh repo clone voidzero-dev/vite-plus
 gh repo clone lucas-barake/effect-tanstack-start # random repo on gh with matching name
+gh repo clone vitest-dev/vitest

@@ -1,24 +1,24 @@
 /**
- * In-process ApiClient using web Request/Response round-trip.
+ * SSR ApiClient: web-handler approach.
  *
- * This creates an HttpApiClient with a custom HttpClient that, instead of
- * making a real HTTP fetch, calls the toWebHandler handler function directly
- * in-process. The handler is the same one mounted on the splat route.
+ * Uses HttpApiClient.makeWith with a custom HttpClient that calls the
+ * toWebHandler function directly in-process (no network). This is the
+ * simplest correct approach.
  *
- * The flow:
- *   HttpApiClient encodes request (schema validation) →
- *   Custom HttpClient converts HttpClientRequest → web Request →
- *   Calls handler(webRequest) in-process (full HttpApi pipeline + middleware) →
- *   Converts web Response → HttpClientResponse →
- *   HttpApiClient decodes response (schema validation)
+ * What makes this different from the other approaches:
+ * - Uses HttpApiBuilder.toWebHandler which creates its OWN internal runtime
+ *   and scope, separate from the caller
+ * - The full HTTP pipeline runs: URL routing, request body
+ *   serialization/deserialization, middleware, response encoding
+ * - The custom HttpClient constructs a web Request object and passes it
+ *   to the handler. new Request() is NOT a network call — it's just
+ *   constructing a JS object — but the handler still parses the URL,
+ *   deserializes the body, runs through the router, etc.
  *
- * Pros: Simplest approach. Guaranteed correctness — identical behavior to a
- *       real HTTP call. Full middleware pipeline runs.
- * Cons: Unnecessary serialization overhead from the web Request/Response
- *       round-trip. Data goes Effect types → web → Effect types → handler →
- *       Effect types → web → Effect types.
- *
- * This is the "web-handler" approach from the implementation notes.
+ * Overhead: URL parsing, JSON body serialize/deserialize, router matching,
+ *           response encoding, separate runtime/scope creation.
+ * Middleware: Runs fully.
+ * Correctness: Guaranteed — identical to a real HTTP call.
  */
 
 import { Effect, Layer } from "effect";
@@ -33,12 +33,10 @@ import { DomainApi } from "@/api/domain-api";
 import { TodosApiLive } from "@/api/todos-api-live";
 import { ApiClient } from "./shared";
 
-// Build the web handler from the API layer — same as what the splat route uses.
 const MyApiLive = HttpApiBuilder.api(DomainApi).pipe(Layer.provide(TodosApiLive));
 const ApiLayer = Layer.mergeAll(MyApiLive, HttpServer.layerContext);
-const { handler: webHandler } = HttpApiBuilder.toWebHandler(ApiLayer);
+const { handler: webHandler } = HttpApiBuilder.toWebHandler(ApiLayer as any);
 
-// Custom HttpClient that calls the web handler in-process instead of fetching.
 const inProcessHttpClient = HttpClient.make((request, url) =>
   Effect.tryPromise({
     try: async () => {
@@ -57,8 +55,8 @@ const inProcessHttpClient = HttpClient.make((request, url) =>
 
 export const InProcessWebHandlerApiClientLive = Layer.effect(
   ApiClient,
-  HttpApiClient.make(DomainApi, {
+  HttpApiClient.makeWith(DomainApi, {
+    httpClient: inProcessHttpClient,
     baseUrl: "http://localhost",
-    transformClient: () => inProcessHttpClient,
   }),
 );

@@ -18,7 +18,7 @@ const ApiLayer = Layer.mergeAll(MyApiLive, HttpServer.layerContext);
 let handlerPromise: Promise<(request: Request) => Promise<Response>> | undefined;
 
 function getApiHandler() {
-  handlerPromise ??= serverRuntime.runPromise(
+  handlerPromise ??= (serverRuntime.runPromise as any)(
     Effect.scoped(
       Effect.gen(function* () {
         const runtime = yield* serverRuntime.runtimeEffect;
@@ -39,7 +39,7 @@ function getApiHandler() {
 
 const effectHandler = async ({ request }: { request: Request }) => {
   const handler = await getApiHandler();
-  return handler(request);
+  return handler!(request);
 };
 
 export const Route = createFileRoute("/api/$")({

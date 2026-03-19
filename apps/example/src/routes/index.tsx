@@ -1,20 +1,40 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useLoaderData } from "@tanstack/react-router";
+import { createIsomorphicFn } from "@tanstack/react-start";
 import { Effect, Option } from "effect";
 import { useState } from "react";
 import { ApiClient } from "@/api-client/shared";
 import { clientRuntime } from "@/client-runtime";
 
+// createIsomorphicFn selects the runtime at compile time.
+// Server: uses serverRuntime (in-process ApiClient, no HTTP).
+// Client: uses clientRuntime (HTTP-based ApiClient).
+const getRuntime = createIsomorphicFn()
+  .server(async () => {
+    const { serverRuntime } = await import("@/server-runtime");
+    return serverRuntime;
+  })
+  .client(() => clientRuntime);
+
 export const Route = createFileRoute("/")({
+  loader: async () => {
+    const runtime = await getRuntime();
+    const todos = await runtime.runPromise(
+      Effect.gen(function* () {
+        const api = yield* ApiClient;
+        return yield* api.todos.list();
+      }),
+    );
+    return { todos: todos.map((t) => ({ id: t.id, title: t.title, completed: t.completed })) };
+  },
   component: Todos,
 });
 
 function Todos() {
-  const [todos, setTodos] = useState<Array<{ id: string; title: string; completed: boolean }>>([]);
+  const { todos: initialTodos } = useLoaderData({ from: "/" });
+  const [todos, setTodos] = useState(initialTodos);
   const [title, setTitle] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const fetchTodos = async () => {
-    setLoading(true);
     const result = await clientRuntime.runPromise(
       Effect.gen(function* () {
         const api = yield* ApiClient;
@@ -22,7 +42,6 @@ function Todos() {
       }),
     );
     setTodos(result.map((t) => ({ id: t.id, title: t.title, completed: t.completed })));
-    setLoading(false);
   };
 
   const addTodo = async () => {
@@ -74,25 +93,21 @@ function Todos() {
         <button onClick={addTodo}>Add</button>
         <button onClick={fetchTodos}>Refresh</button>
       </div>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <ul>
-          {todos.map((todo) => (
-            <li key={todo.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={todo.completed}
-                onChange={() => toggleTodo(todo.id, todo.completed)}
-              />
-              <span style={{ textDecoration: todo.completed ? "line-through" : "none" }}>
-                {todo.title}
-              </span>
-              <button onClick={() => deleteTodo(todo.id)}>x</button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul>
+        {todos.map((todo) => (
+          <li key={todo.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={todo.completed}
+              onChange={() => toggleTodo(todo.id, todo.completed)}
+            />
+            <span style={{ textDecoration: todo.completed ? "line-through" : "none" }}>
+              {todo.title}
+            </span>
+            <button onClick={() => deleteTodo(todo.id)}>x</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

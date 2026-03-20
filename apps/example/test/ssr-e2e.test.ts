@@ -78,8 +78,8 @@ describe("SSR", () => {
       Effect.gen(function* () {
         const clientDir = `${APP_DIR}/.output/public/assets`;
         const exitCode = yield* Command.make(
-          "rg",
-          "--no-filename",
+          "grep",
+          "-r",
           "SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET",
           clientDir,
         ).pipe(Command.exitCode);

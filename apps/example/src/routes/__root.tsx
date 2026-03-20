@@ -20,7 +20,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <nav style={{ padding: 8, display: "flex", gap: 8, fontSize: 18 }}>
-          <Link to="/" activeProps={{ style: { fontWeight: "bold" } }}>
+          <Link to="/" search={{ q: undefined }} activeProps={{ style: { fontWeight: "bold" } }}>
             Home
           </Link>
           <Link to="/login" activeProps={{ style: { fontWeight: "bold" } }}>

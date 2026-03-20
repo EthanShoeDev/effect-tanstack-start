@@ -92,7 +92,7 @@ const DashboardGroupLive = HttpApiBuilder.group(ApiContract, "dashboard", (handl
       };
     }),
   ),
-).pipe(Layer.provide(TodosService.Default));
+);
 
 // ── Exports ────────────────────────────────────────────────────────────
 

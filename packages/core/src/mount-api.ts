@@ -5,7 +5,7 @@
  * that you can assign to every HTTP method in a splat route's `server.handlers`.
  */
 
-import { Effect, Layer, type ManagedRuntime } from "effect";
+import { Context, Effect, Layer, type ManagedRuntime, type Runtime } from "effect";
 import {
   HttpApiBuilder,
   HttpApp,
@@ -15,15 +15,12 @@ import {
   type HttpApiGroup,
 } from "@effect/platform";
 
-export interface MountApiOptions<
-  _ApiId extends string,
-  _Groups extends HttpApiGroup.HttpApiGroup.Any,
-  _ApiError,
-  _ApiR,
-> {
+export interface MountApiOptions {
   /** The server ManagedRuntime. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required for ManagedRuntime variance
   readonly serverRuntime: ManagedRuntime.ManagedRuntime<any, any>;
   /** The composed API implementation Layer (HttpApiBuilder.api(Contract).pipe(...)). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required for Layer variance
   readonly apiLayer: Layer.Layer<any, any, any>;
 }
 
@@ -61,30 +58,30 @@ export function mountApi<
   ApiR,
 >(
   _api: HttpApi.HttpApi<ApiId, Groups, ApiError, ApiR>,
-  options: MountApiOptions<ApiId, Groups, ApiError, ApiR>,
+  options: MountApiOptions,
 ): (args: { request: Request }) => Promise<Response> {
   // Build ServerEnvLayer internally — extracts the runtime's context so the
   // HttpApi handlers can access services (e.g. TodosService) from the runtime
   // without building them a second time.
   const serverEnvLayer = Layer.effectContext(
-    options.serverRuntime.runtimeEffect.pipe(Effect.map((r: any) => r.context)),
+    options.serverRuntime.runtimeEffect.pipe(
+      Effect.map((r: Runtime.Runtime<unknown>) => r.context as Context.Context<never>),
+    ),
   );
 
-  const MyApiLive = (options.apiLayer as Layer.Layer<any, any, any>).pipe(
-    Layer.provide(serverEnvLayer),
-  );
+  const MyApiLive = options.apiLayer.pipe(Layer.provide(serverEnvLayer));
 
-  const ApiLayer = Layer.mergeAll(MyApiLive, HttpServer.layerContext);
+  const ApiLayer = MyApiLive.pipe(Layer.provideMerge(HttpServer.layerContext));
 
   let handlerPromise: Promise<(request: Request) => Promise<Response>> | undefined;
 
   function getApiHandler() {
-    handlerPromise ??= (options.serverRuntime.runPromise as any)(
+    handlerPromise ??= options.serverRuntime.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
           const runtime = yield* options.serverRuntime.runtimeEffect;
 
-          const fullLayer = (ApiLayer as Layer.Layer<any, any, any>).pipe(
+          const fullLayer = ApiLayer.pipe(
             Layer.provideMerge(HttpApiBuilder.Router.Live),
             Layer.provideMerge(HttpApiBuilder.Middleware.layer),
           );
@@ -102,6 +99,6 @@ export function mountApi<
 
   return async ({ request }: { request: Request }) => {
     const handler = await getApiHandler();
-    return handler!(request);
+    return handler(request);
   };
 }

@@ -1,48 +1,87 @@
-import { createFileRoute, useLoaderData } from "@tanstack/react-router";
-import { Option } from "effect";
+import { createFileRoute, useLoaderData, useNavigate } from "@tanstack/react-router";
+import { Effect, Option, Schema } from "effect";
 import { useState } from "react";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
+const SearchParams = Schema.Struct({
+  q: Schema.optional(Schema.String),
+});
+type SearchParams = typeof SearchParams.Type;
+
 export const Route = createFileRoute("/")({
-  loader: () => callApiPromise((api) => api.todos.list()),
+  validateSearch: (input): SearchParams => Schema.decodeUnknownSync(SearchParams)(input),
+  loaderDeps: ({ search }) => ({ q: search.q }),
+  loader: ({ deps }) =>
+    callApiPromise((api) =>
+      deps.q ? api.todos.search({ urlParams: { q: deps.q } }) : api.todos.list(),
+    ),
   component: Todos,
 });
 
 function Todos() {
-  const initialTodos = useLoaderData({ from: "/" });
-  const [todos, setTodos] = useState(initialTodos);
+  const todos = useLoaderData({ from: "/" });
+  const { q } = Route.useSearch();
+  const navigate = useNavigate();
   const [title, setTitle] = useState("");
+  const [search, setSearch] = useState(q ?? "");
 
-  const fetchTodos = async () => {
-    const result = await callApiPromise((api) => api.todos.list());
-    setTodos(result);
+  const handleSearch = (value: string) => {
+    setSearch(value);
+    void navigate({ to: "/", search: { q: value || undefined } });
   };
 
-  const addTodo = async () => {
+  const addTodo = () => {
     if (!title.trim()) return;
-    await callApiPromise((api) => api.todos.create({ payload: { title } }));
-    setTitle("");
-    await fetchTodos();
-  };
-
-  const toggleTodo = async (id: string, completed: boolean) => {
-    await callApiPromise((api) =>
-      api.todos.update({
-        path: { id },
-        payload: { title: Option.none(), completed: Option.some(!completed) },
-      }),
+    void callApiPromise((api) =>
+      api.todos.create({ payload: { title } }).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            setTitle("");
+            void navigate({ to: "/", search: { q: q || undefined } });
+          }),
+        ),
+      ),
     );
-    await fetchTodos();
   };
 
-  const deleteTodo = async (id: string) => {
-    await callApiPromise((api) => api.todos.remove({ path: { id } }));
-    await fetchTodos();
+  const toggleTodo = (id: string, completed: boolean) => {
+    void callApiPromise((api) =>
+      api.todos
+        .update({
+          path: { id },
+          payload: { title: Option.none(), completed: Option.some(!completed) },
+        })
+        .pipe(
+          Effect.tap(() =>
+            Effect.sync(() => void navigate({ to: "/", search: { q: q || undefined } })),
+          ),
+        ),
+    );
+  };
+
+  const deleteTodo = (id: string) => {
+    void callApiPromise((api) =>
+      api.todos
+        .remove({ path: { id } })
+        .pipe(
+          Effect.tap(() =>
+            Effect.sync(() => void navigate({ to: "/", search: { q: q || undefined } })),
+          ),
+        ),
+    );
   };
 
   return (
     <div style={{ padding: 8 }}>
       <h3>Todos</h3>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="Search todos..."
+        />
+      </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input
           type="text"
@@ -52,8 +91,8 @@ function Todos() {
           placeholder="Add a todo..."
         />
         <button onClick={addTodo}>Add</button>
-        <button onClick={fetchTodos}>Refresh</button>
       </div>
+      {q && <p>Showing results for &quot;{q}&quot;</p>}
       <ul>
         {todos.map((todo) => (
           <li key={todo.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>

@@ -22,10 +22,6 @@ jobs:
 
       - run: vp install
 
-      - name: Build
-        run: vp pack
-        working-directory: packages/core
-
       - name: Publish to npm
         run: pnpm publish --filter=./packages/core --access public --no-git-checks
         env:

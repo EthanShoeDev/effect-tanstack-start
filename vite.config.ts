@@ -32,7 +32,7 @@ export default defineConfig({
       },
       // Orchestrates all checks in parallel, then builds
       ready: {
-        command: "vp run build -r",
+        command: "vp run example#build",
         dependsOn: [
           "check-all",
           "effect-tanstack-start#typecheck:tsc",

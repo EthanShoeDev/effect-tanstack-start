@@ -21,6 +21,8 @@ export class SessionStore extends Effect.Service<SessionStore>()("SessionStore",
         return next;
       });
 
-    return { get, set, remove } as const;
+    const keys = Effect.map(Ref.get(store), (m) => Array.from(m.keys()));
+
+    return { get, set, remove, keys } as const;
   }),
 }) {}

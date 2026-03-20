@@ -7,7 +7,7 @@
  */
 
 import { HttpApiBuilder, HttpApp, HttpServerResponse } from "@effect/platform";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import {
   ApiContract,
   AuthMiddleware,
@@ -28,7 +28,11 @@ export const AuthMiddlewareLive = Layer.effect(
     return AuthMiddleware.of({
       session: (token) =>
         Effect.gen(function* () {
-          const tokenStr = typeof token === "string" ? token : ((token as any).value ?? "");
+          const tokenStr = Redacted.value(token);
+          const allTokens = yield* store.keys;
+          yield* Effect.log(
+            `Auth middleware: incoming token="${tokenStr}", stored tokens=[${allTokens.join(", ")}]`,
+          );
           const session = yield* store.get(tokenStr);
           if (!session) {
             return yield* new Unauthorized();

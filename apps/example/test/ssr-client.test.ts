@@ -5,10 +5,12 @@ import { makeSsrApiClientLayer } from "effect-tanstack-start/server";
 import { ApiContract } from "@/api/api-contract";
 import { ApiImplLive } from "@/api/api-impl";
 import { SessionStore } from "@/services/session-store";
+import { TodosService } from "@/services/todos-service";
 
 const ApiClient = makeApiClientTag(ApiContract);
 const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient);
 const TestLayer = SsrApiClientLive.pipe(
+  Layer.provideMerge(TodosService.Default),
   Layer.provideMerge(SessionStore.Default),
   Layer.provideMerge(Logger.pretty),
 );

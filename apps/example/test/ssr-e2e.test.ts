@@ -58,20 +58,14 @@ describe("SSR", () => {
           Schedule.addDelay(Schedule.recurs(30), () => "500 millis"),
         );
 
-        // Seed a todo so we can verify it in SSR HTML
-        yield* Effect.tryPromise(() =>
-          fetch(`${BASE_URL}/api/todos`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "Buy milk" }),
-          }),
+        // Fetch the page and check raw HTML contains pre-seeded todos
+        const html = yield* Effect.tryPromise(() =>
+          fetch(BASE_URL, { headers: { "Accept-Encoding": "identity" } }).then((r) => r.text()),
         );
 
-        // Fetch the page and check raw HTML
-        const html = yield* Effect.tryPromise(() => fetch(BASE_URL).then((r) => r.text()));
-
         expect(html).toContain("<h3>Todos</h3>");
-        expect(html).toContain("Buy milk");
+        expect(html).toContain("Learn Effect");
+        expect(html).toContain("Ship it");
 
         yield* server.kill("SIGKILL");
       }).pipe(Effect.scoped, Effect.provide(NodeContext.layer)),

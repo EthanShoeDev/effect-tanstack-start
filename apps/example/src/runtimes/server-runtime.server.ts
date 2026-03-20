@@ -10,11 +10,12 @@ import { ApiClient } from "@/services/api-client-tag";
 const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient);
 
 export const serverRuntime = globalValue("ServerRuntime", () => {
-  const ServerLayer = Layer.mergeAll(
-    TodosService.Default,
-    SessionStore.Default,
-    SsrApiClientLive,
-    Logger.pretty,
+  // Stateful services are provided here so that both the SSR client and
+  // the HTTP handler (mountApi) share the same instances.
+  const ServerLayer = SsrApiClientLive.pipe(
+    Layer.provideMerge(TodosService.Default),
+    Layer.provideMerge(SessionStore.Default),
+    Layer.provideMerge(Logger.pretty),
   );
   const runtime = ManagedRuntime.make(ServerLayer);
   process.on("SIGINT", () => void runtime.dispose());

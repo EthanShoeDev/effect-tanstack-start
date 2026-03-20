@@ -19,11 +19,17 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <div style={{ padding: 8, display: "flex", gap: 8, fontSize: 18 }}>
+        <nav style={{ padding: 8, display: "flex", gap: 8, fontSize: 18 }}>
           <Link to="/" activeProps={{ style: { fontWeight: "bold" } }}>
             Home
           </Link>
-        </div>
+          <Link to="/login" activeProps={{ style: { fontWeight: "bold" } }}>
+            Login
+          </Link>
+          <Link to="/dashboard" activeProps={{ style: { fontWeight: "bold" } }}>
+            Dashboard
+          </Link>
+        </nav>
         <hr />
         {children}
         <Scripts />

@@ -52,9 +52,12 @@ const TodosGroupLive = HttpApiBuilder.group(ApiContract, "todos", (handlers) =>
         return yield* todos.remove(path.id);
       }),
     ),
-).pipe(Layer.provide(TodosService.Default));
+);
 
 // Compose all groups into the full API implementation.
+// Stateful services (TodosService, SessionStore) are NOT provided here —
+// they must come from the runtime so that the SSR client and HTTP handler
+// share the same instances (same Ref, same in-memory state).
 export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
   Layer.provide(TodosGroupLive),
   Layer.provide(AuthGroupLive),

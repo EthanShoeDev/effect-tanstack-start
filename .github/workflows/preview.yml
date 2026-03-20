@@ -1,0 +1,27 @@
+name: Preview Package
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "22"
+          cache: true
+
+      - run: vp install
+
+      - name: Build
+        run: vp pack
+        working-directory: packages/core
+
+      - run: vp dlx pkg-pr-new publish './packages/core'

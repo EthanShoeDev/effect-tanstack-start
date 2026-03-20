@@ -1,10 +1,20 @@
 {
   "name": "effect-tanstack-start",
-  "version": "0.0.0",
+  "version": "0.0.1-beta.1",
   "description": "Seamlessly integrate Effect-ts with TanStack Start.",
+  "homepage": "https://github.com/EthanShoeDev/effect-tanstack-start#readme",
+  "bugs": {
+    "url": "https://github.com/EthanShoeDev/effect-tanstack-start/issues"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EthanShoeDev/effect-tanstack-start.git",
+    "directory": "packages/core"
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "type": "module",
   "exports": {

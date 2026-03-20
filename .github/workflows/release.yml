@@ -22,7 +22,8 @@ jobs:
 
       - run: vp install
 
+      - name: Set npm auth
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
       - name: Publish to npm
         run: vp pm publish --filter=./packages/core --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

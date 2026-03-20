@@ -1,236 +1,193 @@
 # Implementation Notes
 
-We want to keep track of important design decisions and implementation notes here.
+Design decisions and implementation notes for `effect-tanstack-start`.
 
-## Library API: Accept both runtimes and layers
+## What the Library Provides
 
-Following the pattern from effect-nextjs, our library should accept either a `ManagedRuntime` or a `Layer` from the user. The user is responsible for defining their server and client runtimes/layers (including HMR-safe setup via `globalValue`, disposal on SIGINT/SIGTERM, etc.). The library handles the TanStack Start-specific wiring — mounting HttpApi on splat routes, bridging `createServerFn`, running effects in loaders, etc.
+The library (`packages/core`) exports four functions:
 
-This mirrors `Next.make("BasePage", AppLive)` (accepts a Layer) and `Next.makeWithRuntime("BasePage", statefulRuntime)` (accepts a ManagedRuntime) from effect-nextjs.
+- **`makeApiClientTag(ApiContract)`** — Creates a shared `Context.Tag` for the typed API client. Both server and client runtimes provide this tag with different implementations.
+- **`makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient)`** — Creates a Layer providing the ApiClient via direct handler invocation (no HTTP). For the server runtime.
+- **`makeHttpApiClientLayer(ApiContract, ApiClient)`** — Creates a Layer providing the ApiClient via HTTP fetch. For the client runtime.
+- **`mountApi(ApiContract, { serverRuntime, apiLayer })`** — Creates a request handler for a TanStack Start API splat route.
+- **`makeCallApiPromise(ApiClient, getRuntime)`** — Creates a convenience helper that picks the right runtime, yields the ApiClient, and runs the effect as a Promise.
 
-Reference: `docs/cloned-repos-as-docs/effect-nextjs/README.md`
+The library ships as raw TypeScript source (`"exports": { ".": "./src/index.ts" }`) so that TanStack Start's Vite plugin can process it.
 
-## Core Problem: Calling Effect HttpApi endpoints from SSR
+## How the User Sets Things Up
 
-The user defines an Effect HttpApi with typed schemas and mounts it on a TanStack Start splat route (`api.$.ts`). From the client, the derived `HttpApiClient` calls these endpoints over HTTP — this works fine.
+Four files in the user's app:
 
-The hard problem: calling these same endpoints from SSR (route loaders, server functions) **without**:
+### 1. Registration file (`effect-tanstack.ts`)
 
-- Making an HTTP request to yourself (wasteful round-trip)
-- Wrapping each endpoint in `createServerFn` (duplicates every endpoint)
-- Calling services directly and bypassing the HttpApi contract (loses schema validation and type safety)
-
-**We want to use the derived `HttpApiClient` everywhere** — it enforces the Effect Schema contract at both the type level (TypeScript) and runtime (schema validation). The API implementations may not always be backed by a directly-exposed service — they may compose multiple services, have custom validation logic, or transform data. The `HttpApiClient` is the universal typed interface.
-
-**Strongly typed errors are essential.** A huge reason to use Effect at all is typed error channels. Each endpoint method on the derived client returns `Effect<Success, Error, R>` where `Error` is the exact union of errors defined in the API contract (e.g., `TodoNotFound | HttpApiDecodeError`). All three SSR implementation options must preserve these typed errors — they are not just success-value wrappers.
-
-### Deriving the shared ApiClient type
-
-To share the same `ApiClient` tag between server and client runtimes, we need to extract the full client type from `HttpApiClient.make`. The cleanest approach is a dummy helper function:
+Creates the shared `ApiClient` tag. This is the only thing shared between server and client. No server-only imports.
 
 ```ts
-function _makeClient() {
-  return HttpApiClient.make(DomainApi);
-}
-type DomainApiClient = Effect.Effect.Success<ReturnType<typeof _makeClient>>;
+import { makeApiClientTag } from "effect-tanstack-start";
+import { ApiContract } from "@/api/api-contract";
 
-class ApiClient extends Context.Tag("ApiClient")<ApiClient, DomainApiClient>() {}
+export const ApiClient = makeApiClientTag(ApiContract);
 ```
 
-This captures the full typed client including all endpoint methods, success types, and error types. The helper is never called at runtime.
+### 2. Server runtime (`runtimes/server-runtime.server.ts`)
 
-Reference: `apps/example/src/api-client/shared.ts`
-
-## Key Architectural Facts
-
-### TanStack Start route loaders are isomorphic
-
-Route loaders run on BOTH the server and client. During SSR, the loader runs on the server and the data is dehydrated into the HTML. On client-side navigation, the loader runs again on the client. This means you **cannot** put server-only code directly in a loader — it must work in both environments.
-
-Reference: `docs/cloned-repos-as-docs/router/packages/router-core/src/load-matches.ts` (lines 656-703)
-
-This has a critical implication: the loader needs a way to call the Effect HttpApi that works in both environments. See "The Isomorphic Runtime Pattern" below.
-
-### TanStack Start's createServerFn at SSR time
-
-`createServerFn` does NOT make an HTTP request at SSR time. The Vite plugin splits the code at compile time — on the server, the handler is imported and called directly in-process. Only client-side calls go through HTTP. This is zero-overhead SSR. The full middleware chain still runs at SSR time (deduplicating any request middleware that already ran).
-
-Reference:
-
-- `docs/cloned-repos-as-docs/router/packages/start-client-core/src/createServerFn.ts` (lines 151-183, `__executeServer`)
-- `docs/cloned-repos-as-docs/router/packages/start-server-core/src/createSsrRpc.ts`
-- `docs/cloned-repos-as-docs/router/packages/start-plugin-core/src/start-compiler-plugin/handleCreateServerFn.ts`
-
-### Effect HttpApi middleware runs server-side only
-
-Effect's `HttpApiMiddleware` (e.g., auth middleware) runs on the server before every handler. The client does not know about middleware — it just sends the required headers (e.g., `Authorization: Bearer <token>`). The server's middleware extracts, validates, and injects the result (e.g., `CurrentSession`) into the Effect context.
-
-Reference:
-
-- `docs/cloned-repos-as-docs/effect/packages/platform/src/HttpApiBuilder.ts` (applyMiddleware)
-- `docs/cloned-repos-as-docs/listening-astro/packages/core/api-contract/src/middleware.ts` (auth middleware definition)
-- `docs/cloned-repos-as-docs/listening-astro/apps/api/src/api-impl/auth-middleware.ts` (auth middleware implementation)
-
-For Option C (direct handler invocation), middleware DOES still run as long as we go through the Effect handler layer — middleware is part of the Effect pipeline, not the HTTP transport. It runs because it's wired into the Layer, not because there's an HTTP request.
-
-### HttpApiClient.make internals — the injection point
-
-`HttpApiClient.make()` builds a typed client object by iterating through the API definition. Each endpoint becomes an Effect-returning function that:
-
-1. Schema-encodes the request (path, payload, headers, url params)
-2. Calls `httpClient.execute(httpClientRequest)` — **this is the injection point**
-3. Schema-decodes the response by status code
-
-The `transformClient` option lets us replace the `HttpClient` used in step 2. The `makeWith` function also accepts an `httpClient` directly.
-
-Reference: `docs/cloned-repos-as-docs/effect/packages/platform/src/HttpApiClient.ts` (lines 107-268)
-
-## The Isomorphic Runtime Pattern
-
-Because loaders are isomorphic, the cleanest approach is: **both the server and client runtimes provide the same Effect Context tag for the derived API client, but with different implementations.**
+The `.server.ts` suffix triggers TanStack Start's import protection — this file is automatically excluded from the client bundle.
 
 ```ts
-// Shared tag — both runtimes provide this
-class ApiClient extends Effect.Tag("ApiClient")<
-  ApiClient,
-  HttpApiClient.Client<typeof DomainApi>
->() {}
+import { makeSsrApiClientLayer, mountApi } from "effect-tanstack-start";
+
+const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient);
+
+export const serverRuntime = globalValue("ServerRuntime", () => {
+  const ServerLayer = Layer.mergeAll(TodosService.Default, SsrApiClientLive, Logger.pretty);
+  return ManagedRuntime.make(ServerLayer);
+});
+
+// Handler for the API splat route
+export const apiHandler = mountApi(ApiContract, { serverRuntime, apiLayer: ApiImplLive });
 ```
 
-**Server runtime provides:** an in-process `ApiClient` that calls the Effect handler directly (no HTTP).
-
-**Client runtime provides:** an HTTP-based `ApiClient` that calls the splat route over the network.
-
-The loader uses whichever runtime is active:
+### 3. Client runtime (`runtimes/client-runtime.ts`)
 
 ```ts
-// createIsomorphicFn selects the runtime at compile time
-const getRuntime = createIsomorphicFn()
+import { makeHttpApiClientLayer } from "effect-tanstack-start";
+
+const HttpApiClientLive = makeHttpApiClientLayer(ApiContract, ApiClient);
+
+export const clientRuntime = globalValue("ClientRuntime", () =>
+  ManagedRuntime.make(Layer.mergeAll(HttpApiClientLive, Logger.pretty)),
+);
+```
+
+### 4. Isomorphic runtime getter (`runtimes/get-runtime.ts`)
+
+Uses `createIsomorphicFn` to select the correct runtime at compile time. Statically imports the `.server.ts` file — import protection handles exclusion from the client bundle.
+
+```ts
+import { serverRuntime } from "./server-runtime.server";
+import { clientRuntime } from "./client-runtime";
+
+export const getRuntime = createIsomorphicFn()
   .server(() => serverRuntime)
   .client(() => clientRuntime);
 
-export const Route = createFileRoute("/todos")({
-  loader: () =>
-    getRuntime().runPromise(
-      Effect.gen(function* () {
-        const api = yield* ApiClient;
-        return yield* api.todos.list();
-      }),
-    ),
-  component: TodosPage,
+export const callApiPromise = makeCallApiPromise(ApiClient, getRuntime);
+```
+
+### Usage in routes
+
+```ts
+// Loader — one-liner, works on both server and client
+loader: () => callApiPromise((api) => api.todos.list()),
+
+// Splat route — config must be inline, not an imported object (see below)
+import { apiHandler } from "@/runtimes/server-runtime.server";
+export const Route = createFileRoute("/api/$")({
+  server: {
+    handlers: {
+      GET: apiHandler, POST: apiHandler, PUT: apiHandler,
+      PATCH: apiHandler, DELETE: apiHandler, OPTIONS: apiHandler,
+    },
+  },
 });
 ```
 
-The loader code is written once. At SSR time, `serverRuntime` runs it with the in-process client. At client navigation time, `clientRuntime` runs it with the HTTP client.
+## How the SSR Client Works
 
-Reference for `createIsomorphicFn`:
+The `makeSsrApiClientLayer` builds a client with the same typed interface as `HttpApiClient.Client` but calls the route handlers directly — no HTTP.
 
-- `docs/cloned-repos-as-docs/router/packages/start-client-core/src/createIsomorphicFn.ts`
-- `docs/cloned-repos-as-docs/router/packages/start-plugin-core/src/start-compiler-plugin/handleCreateIsomorphicFn.ts`
+1. Builds the full API Layer (including `HttpApiBuilder.Router.Live` and `HttpApiBuilder.Middleware.layer`)
+2. Calls `Layer.toRuntime()` to get the built runtime with the router
+3. Extracts the `HttpRouter` from the runtime context — it contains all registered routes
+4. Uses `HttpApi.reflect()` to iterate the API definition and create endpoint functions
+5. Each endpoint function provides a minimal fake `HttpServerRequest` (just method, URL, and payload via `request.json`) and a `RouteContext` with path params
+6. Calls the route handler Effect directly with this context
+7. Extracts the response body from the `HttpServerResponse`
 
-## Options for the server-side ApiClient implementation
+The handler runs the full pipeline: schema decoding, middleware, business logic, response encoding. The only thing skipped is actual HTTP transport.
 
-All three options provide the same typed `ApiClient` interface. They differ in how the server-side implementation calls the Effect HttpApi handlers.
+Reference: `packages/core/src/ssr-api-client.ts`
 
-### Option A: In-process HttpClient via transformClient (web Request/Response round-trip)
+## Tree-Shaking and Import Protection
 
-Use `HttpApiClient.make()` with a custom `HttpClient` that:
+### The problem
 
-1. Converts `HttpClientRequest` → web `Request`
-2. Calls the `toWebHandler` handler function directly (same handler mounted on the splat route)
-3. Converts web `Response` → `HttpClientResponse`
+TanStack Start route files are loaded in both client and server environments (the route tree imports them). Top-level imports in route files end up in the client bundle.
 
-**Pros:** Simplest to implement. Full HTTP pipeline runs (routing, all middleware, error handling). Guaranteed correctness — identical behavior to a real HTTP call.
+### The solution
 
-**Cons:** Unnecessary serialization overhead. The data goes: Effect types → web Request → Effect types → handler → Effect types → web Response → Effect types. The round-trip through web primitives is wasted work.
+Server-only code uses the `.server.ts` naming convention. TanStack Start's import protection plugin automatically blocks `.server.*` files from the client bundle, replacing them with mocks.
 
-**Middleware:** Runs fully — the web handler includes all middleware.
+Key rules:
 
-Reference for toWebHandler internals:
+- **`server-runtime.server.ts`** — named with `.server.` so import protection blocks it from the client
+- **`effect-tanstack.ts`** — only contains the shared `ApiClient` tag, safe for both environments
+- **`get-runtime.ts`** — statically imports `server-runtime.server.ts`, but import protection handles the client-side exclusion
+- **`api.$.ts`** — imports `apiHandler` from the `.server.ts` file, same protection applies
 
-- `docs/cloned-repos-as-docs/effect/packages/platform/src/HttpApiBuilder.ts` (lines 182-203)
-- `docs/cloned-repos-as-docs/effect/packages/platform/src/HttpApp.ts` (lines 211-300, `toWebHandlerRuntime`)
+Reference: `docs/cloned-repos-as-docs/router/docs/start/framework/react/guide/import-protection.md`
 
-### Option B: Effect-level in-process client (skip web types)
+### The `createFileRoute` config must be inline
 
-Instead of going through the web handler, call the `HttpApp` Effect directly:
-
-1. `HttpApiClient` encodes the request into an `HttpClientRequest` (schema validation here)
-2. Convert `HttpClientRequest` → `HttpServerRequest` (Effect internal types, not web types — much cheaper)
-3. Run the `HttpApp` Effect directly with the server runtime
-4. Convert `HttpServerResponse` → `HttpClientResponse`
-5. `HttpApiClient` decodes the response (schema validation here)
-
-**Pros:** Full schema contract, no web serialization overhead. Middleware runs because the `HttpApp` includes the full middleware pipeline.
-
-**Cons:** Needs investigation into whether Effect platform has `HttpClientRequest` ↔ `HttpServerRequest` conversion utilities or if we'd need to build them. More complex than Option A.
-
-**Middleware:** Runs fully — the `HttpApp` includes all middleware.
-
-Reference:
-
-- `docs/cloned-repos-as-docs/effect/packages/platform/src/HttpApp.ts` (HttpApp is `Effect<HttpServerResponse, E, R | HttpServerRequest>`)
-
-### Option C: Direct handler invocation (bypass HTTP routing)
-
-Call the `HttpApiBuilder.group` handler for a specific endpoint directly:
-
-1. Schema-encode the input
-2. Call the handler Effect directly (the same Effect that `HttpApiBuilder.group().handle()` wraps)
-3. Schema-decode the output
-
-**Pros:** Maximum performance — no routing, no HTTP abstractions. Just schema validation and the handler.
-
-**Cons:** Most complex. Must replicate parts of `HttpApiBuilder` internals to correctly invoke handlers. Need to handle middleware ourselves.
-
-**Middleware:** Does NOT automatically run because we're bypassing the HttpApp pipeline. We would need to either:
-
-- Manually apply middleware layers before invoking the handler (complex but possible — the middleware is just Effect Layers)
-- Accept that SSR calls skip Effect HttpApi middleware (may be acceptable if auth is handled by TanStack Start's own middleware at the request level)
-
-In practice, many apps handle auth at the TanStack Start request middleware level (e.g., `beforeLoad` in the root route), not at the Effect HttpApi middleware level. In that case, skipping Effect middleware at SSR time is fine — the auth context is already established. But this is an assumption we shouldn't force on users.
-
-Reference for how middleware is applied in HttpApiBuilder:
-
-- `docs/cloned-repos-as-docs/effect/packages/platform/src/HttpApiBuilder.ts` (search `applyMiddleware`)
-
-## Recommendation
-
-Start with **Option A** — it's the simplest, guaranteed correct, and lets us validate the isomorphic runtime pattern end-to-end. The library API should be the same regardless of which option is used internally, so we can optimize later without breaking user code.
-
-The library could expose a configuration option:
+TanStack's router generator performs **static AST analysis** on route files at build time. In `@tanstack/router-generator` (`packages/router-generator/src/transform/transform.ts`, lines 45–57), the transform function parses the first argument to `createFileRoute(path)(config)`:
 
 ```ts
-// Default: Option A (safe, correct)
-mountApi(DomainApi, { transport: "web-handler" });
-
-// Optimized: Option B (skip web types)
-mountApi(DomainApi, { transport: "effect-direct" });
+// From TanStack router-generator transform.ts
+const firstArgument = callExpression.arguments[0];
+if (firstArgument) {
+  if (firstArgument.type === "ObjectExpression") {
+    const staticProperties = firstArgument.properties.flatMap((p) => {
+      if (p.type === "ObjectProperty" && p.key.type === "Identifier") {
+        return p.key.name;
+      }
+      return [];
+    });
+    node.createFileRouteProps = new Set(staticProperties);
+  }
+}
 ```
 
-## Example App Layout
+It expects an `ObjectExpression` AST node — a literal `{ ... }` in source. It extracts property names (`server`, `component`, `loader`, etc.) into `createFileRouteProps` to classify the route.
 
-All three SSR approaches live side-by-side in `apps/example/src/api-client/` for comparison:
+When the config is an opaque imported variable — e.g. `createFileRoute("/api/$")(apiRouteConfig)` — the first argument is an `Identifier` node, not an `ObjectExpression`. The generator extracts **no properties**, so `createFileRouteProps` is never set. This has two consequences:
 
-```
-apps/example/src/api-client/
-  shared.ts                      # shared ApiClient Effect tag (used by all approaches)
-  http.ts                        # HTTP-based impl for client runtime
-  in-process-web-handler.ts      # web Request/Response round-trip approach
-  in-process-effect-direct.ts    # Effect-level HttpApp direct approach
-  in-process-direct-call.ts      # direct handler invocation approach (placeholder)
-```
+1. **Runtime error:** `"Route cannot have both an 'id' and a 'path' option"` — thrown by the `Route` constructor (`@tanstack/router-core`, `packages/router-core/src/route.ts`, line 1754). Import protection mocks the `.server.ts` import on the client side, and the mock value (likely `undefined` or an empty proxy) gets merged into route options in a way that sets both `id` and `path`.
+2. **Broken route classification:** Without `createFileRouteProps`, the generator can't determine this is an API-only route (no `component`, just `server.handlers`), which may affect tree-shaking and import protection decisions.
 
-`server-runtime.ts` imports whichever server approach to try. `client-runtime.ts` always uses `http.ts`.
+**The fix:** Always write the route config object inline. `mountApi` returns just the handler function, and the route file assembles the `{ server: { handlers: { ... } } }` structure itself. This way the AST parser sees an `ObjectExpression` with a `server` property and correctly classifies the route.
+
+### The server-code-in-client-bundle wild goose chase
+
+We had a test checking that `SUPER_SECRET` (a string in `TodosService`) didn't appear in the client bundle. It was appearing, and we spent significant time investigating the wrong cause.
+
+**What we thought was happening:** `createIsomorphicFn` in `get-runtime.ts` statically imports `server-runtime.server.ts`. We assumed this import was pulling the entire server runtime (including `TodosService` and its `SUPER_SECRET` string) into the client bundle. We tried many approaches to fix this:
+
+- Dynamic `import()` in the server branch of `createIsomorphicFn`
+- Marking packages with `sideEffects: false`
+- Using `@tanstack/react-start/server-only` in various files
+- Disabling minification to inspect the bundle
+
+None of these worked, and we kept seeing the string in the client output.
+
+**What was actually happening:** The real culprit was `api.$.ts` — the splat route file. It imported `apiRouteConfig` (the full route config object) from `server-runtime.server.ts`. Because `createFileRoute("/api/$")(apiRouteConfig)` passes an opaque variable, the compiler couldn't statically determine this was an API-only route. Import protection was either not kicking in properly or the mock was still pulling in transitive dependencies.
+
+**The fix was simple:** Have `mountApi` return just the handler function, and write the route config inline in `api.$.ts`. Once we did this, import protection correctly identified the `.server.ts` import and mocked it on the client. The `SUPER_SECRET` string disappeared from the client bundle.
+
+**Lesson:** When server code leaks into the client bundle, check all import sites — not just the obvious ones. Route files are loaded in both environments, and how their config is structured matters for TanStack's static analysis. The `.server.ts` naming convention works, but only if the compiler can see the route config shape.
+
+### What doesn't work
+
+- `createIsomorphicFn` does NOT automatically prune top-level imports of modules with side effects (like `globalValue` calls). The `.server.ts` naming convention is required.
+- `sideEffects: false` in `package.json` was not sufficient for Rolldown to tree-shake these imports.
+- Marking a route file with `import '@tanstack/react-start/server-only'` fails because the route tree needs the file in both environments.
+- Passing the entire `mountApi` result (a config object) directly to `createFileRoute` breaks static analysis and causes runtime errors.
 
 ## TODO
 
-- [ ] Wire `server-runtime.ts` and `client-runtime.ts` to use the shared `ApiClient` tag
-- [ ] Wire up `createIsomorphicFn` to select the correct runtime in loaders
-- [ ] Test all three SSR approaches end-to-end with the isomorphic loader pattern
+- [ ] Write README.md with full documentation
 - [ ] Integrate with TanStack Query and effect-query for data fetching — reference: `docs/cloned-repos-as-docs/router/examples/react/start-basic-react-query` and `docs/cloned-repos-as-docs/effect-query`
-- [ ] Investigate direct `HttpClientRequest` → `HttpServerRequest` conversion to avoid web Request intermediate in effect-direct approach
-- [ ] Investigate extracting individual endpoint handler Effects from HttpApiBuilder internals for the direct-call approach
-- [ ] Handle auth middleware story: document how Effect HttpApi auth middleware interacts with TanStack Start auth middleware, and what the recommended pattern is
-- [ ] Add example route that uses TanStack Query + effect-query for SSR data fetching (mirroring start-basic-react-query pattern)
-- [ ] Extract the finished patterns from the example app into `packages/core` as the publishable library
+- [ ] Handle auth middleware story: document how Effect HttpApi auth middleware interacts with TanStack Start auth middleware
+- [ ] Add example route using TanStack Query + effect-query for SSR data fetching
+- [ ] Investigate reducing `as any` casts in `ssr-api-client.ts` and `mount-api.ts`
+- [ ] Consider whether the library should provide a helper for the `apiHandler` pattern (splat route setup)
+- [ ] Investigate publishing as bundled `.js` + `.d.ts` instead of raw `.ts` source — requires understanding how TanStack Start's Vite plugin interacts with pre-bundled code containing `createIsomorphicFn`

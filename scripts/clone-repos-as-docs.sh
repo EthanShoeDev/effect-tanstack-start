@@ -23,3 +23,4 @@ gh repo clone voidzero-dev/vite-plus
 gh repo clone lucas-barake/effect-tanstack-start # random repo on gh with matching name
 gh repo clone vitest-dev/vitest
 gh repo clone rolldown/rolldown
+gh repo clone better-auth/better-call

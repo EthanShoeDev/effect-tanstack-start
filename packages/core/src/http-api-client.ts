@@ -4,15 +4,24 @@
  */
 
 import { Context, Effect, Layer } from "effect";
-import { FetchHttpClient, HttpApiClient, type HttpApi, type HttpApiGroup } from "@effect/platform";
+import {
+  FetchHttpClient,
+  HttpApiClient,
+  HttpClient,
+  type HttpApi,
+  type HttpApiGroup,
+} from "@effect/platform";
 
 /**
  * Create a Layer that provides the ApiClient via HTTP fetch.
  * Use this in the client-side runtime for browser navigation.
  *
+ * All options from `HttpApiClient.make` (e.g. `transformClient`, `transformResponse`)
+ * are passed through. The `baseUrl` defaults to `window.location.origin` in the browser.
+ *
  * @param api - Your HttpApi contract definition
  * @param clientTag - The ApiClient tag (from makeApiClientTag)
- * @param options - Optional base URL override
+ * @param options - Options forwarded to HttpApiClient.make
  *
  * @example
  * ```ts
@@ -28,7 +37,15 @@ export function makeHttpApiClientLayer<
 >(
   api: HttpApi.HttpApi<ApiId, Groups, ApiError, ApiR>,
   clientTag: ClientTag,
-  options?: { baseUrl?: string | URL },
+  options?: {
+    readonly baseUrl?: URL | string | undefined;
+    readonly transformClient?:
+      | ((client: HttpClient.HttpClient) => HttpClient.HttpClient)
+      | undefined;
+    readonly transformResponse?:
+      | ((effect: Effect.Effect<unknown, unknown>) => Effect.Effect<unknown, unknown>)
+      | undefined;
+  },
 ): Layer.Layer<Context.Tag.Identifier<ClientTag>> {
   const baseUrl =
     options?.baseUrl?.toString() ??
@@ -39,7 +56,10 @@ export function makeHttpApiClientLayer<
   return Layer.effect(
     clientTag,
     Effect.gen(function* () {
-      return (yield* HttpApiClient.make(api, { baseUrl })) as Context.Tag.Service<ClientTag>;
+      return (yield* HttpApiClient.make(api, {
+        ...options,
+        baseUrl,
+      })) as Context.Tag.Service<ClientTag>;
     }),
   ).pipe(Layer.provide(FetchHttpClient.layer)) as Layer.Layer<Context.Tag.Identifier<ClientTag>>;
 }

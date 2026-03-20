@@ -8,6 +8,7 @@
 import { HttpApiBuilder } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { ApiContract } from "./api-contract";
+import { AuthGroupLive, AuthMiddlewareLive, DashboardGroupLive } from "./auth-impl";
 import { TodosService } from "../services/todos-service";
 
 // Individual group implementations
@@ -17,6 +18,14 @@ const TodosGroupLive = HttpApiBuilder.group(ApiContract, "todos", (handlers) =>
       Effect.gen(function* () {
         const todos = yield* TodosService;
         return yield* todos.list;
+      }),
+    )
+    .handle("search", ({ urlParams }) =>
+      Effect.gen(function* () {
+        const todos = yield* TodosService;
+        const all = yield* todos.list;
+        const query = urlParams.q.toLowerCase();
+        return all.filter((t) => t.title.toLowerCase().includes(query));
       }),
     )
     .handle("getById", ({ path }) =>
@@ -46,6 +55,9 @@ const TodosGroupLive = HttpApiBuilder.group(ApiContract, "todos", (handlers) =>
 ).pipe(Layer.provide(TodosService.Default));
 
 // Compose all groups into the full API implementation.
-// Add more groups here as you add them to ApiContract:
-//   Layer.provide(OtherGroupLive),
-export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(Layer.provide(TodosGroupLive));
+export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
+  Layer.provide(TodosGroupLive),
+  Layer.provide(AuthGroupLive),
+  Layer.provide(DashboardGroupLive),
+  Layer.provide(AuthMiddlewareLive),
+);

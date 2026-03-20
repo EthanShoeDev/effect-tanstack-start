@@ -1,8 +1,8 @@
-import { makeHttpApiClientLayer } from "effect-tanstack-start";
+import { makeHttpApiClientLayer } from "effect-tanstack-start/client";
 import { Layer, Logger, ManagedRuntime } from "effect";
 import { globalValue } from "effect/GlobalValue";
 import { ApiContract } from "@/api/api-contract";
-import { ApiClient } from "@/effect-tanstack";
+import { ApiClient } from "@/services/api-client-tag";
 
 const HttpApiClientLive = makeHttpApiClientLayer(ApiContract, ApiClient);
 

@@ -1,6 +1,5 @@
-/// <reference types="vitest/config" />
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import { defineConfig } from "vite";
+import { defineConfig } from "vite-plus";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import path from "path";
@@ -28,5 +27,17 @@ export default defineConfig({
       ],
   test: {
     include: ["test/**/*.test.ts"],
+  },
+  run: {
+    tasks: {
+      typecheck: {
+        command: "tsgo --noEmit",
+        input: [{ auto: true }, "!**/*.tsbuildinfo"],
+      },
+      "typecheck:tsc": {
+        command: "tsc --noEmit",
+        input: [{ auto: true }, "!**/*.tsbuildinfo"],
+      },
+    },
   },
 });

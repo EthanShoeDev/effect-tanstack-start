@@ -8,7 +8,36 @@ import {
 
 export class TodosService extends Effect.Service<TodosService>()("TodosService", {
   effect: Effect.gen(function* () {
-    const todosRef = yield* Ref.make<Map<string, Todo>>(new Map());
+    const seedTodos = new Map<string, Todo>([
+      [
+        "1",
+        {
+          id: "1",
+          title: "Learn Effect",
+          completed: true,
+          createdAt: DateTime.unsafeMake(0),
+        },
+      ],
+      [
+        "2",
+        {
+          id: "2",
+          title: "Build something with TanStack Start",
+          completed: false,
+          createdAt: DateTime.unsafeMake(0),
+        },
+      ],
+      [
+        "3",
+        {
+          id: "3",
+          title: "Ship it",
+          completed: false,
+          createdAt: DateTime.unsafeMake(0),
+        },
+      ],
+    ]);
+    const todosRef = yield* Ref.make<Map<string, Todo>>(seedTodos);
     // We can grep the client bundle to ensure this string is not included.
     const superSecretString = "SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET";
 

@@ -74,3 +74,16 @@ These commands map to their corresponding tools. For example, `vp dev --port 300
 - [ ] Run `vp install` after pulling remote changes and before getting started.
 - [ ] Run `vp check` and `vp test` to validate changes.
 <!--VITE PLUS END-->
+
+# Project-Specific Instructions
+
+## Use `vp run check-all` instead of `vp check`
+
+This project uses `@effect/language-service` to patch `tsc` with Effect-specific lint diagnostics (e.g. floatingEffect, unnecessaryPipe, tryCatchInEffectGen). These lints only run through patched `tsc`, not through tsgo/tsgolint which powers `vp check`.
+
+`vp run check-all` runs both `vp check` (fmt + oxlint + tsgo typecheck) and `tsc --noEmit` (Effect lints) in parallel via the Vite+ task runner. Always use this instead of bare `vp check` to catch Effect-specific issues.
+
+- `vp run check-all` — full check including Effect lints (use this)
+- `vp check` — fast check without Effect lints (incomplete for this project)
+- `vp run typecheck:tsc -r` — only the Effect lints via patched tsc
+- `vp run ready` — full CI pipeline (check-all + tests + build)

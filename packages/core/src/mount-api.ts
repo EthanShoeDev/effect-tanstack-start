@@ -1,6 +1,8 @@
 /**
- * Helper to mount an Effect HttpApi on a TanStack Start splat route.
- * Returns a route config object with all HTTP method handlers wired up.
+ * Creates a request handler that serves an Effect HttpApi via TanStack Start.
+ *
+ * Returns a single async handler function `({ request: Request }) => Promise<Response>`
+ * that you can assign to every HTTP method in a splat route's `server.handlers`.
  */
 
 import { Effect, Layer, type ManagedRuntime } from "effect";
@@ -26,19 +28,30 @@ export interface MountApiOptions<
 }
 
 /**
- * Mount an Effect HttpApi on a TanStack Start splat route.
+ * Create a request handler for an Effect HttpApi.
  *
- * Returns `{ server: { handlers: { GET, POST, ... } } }` — pass this
- * directly to `createFileRoute(path)(...)`.
+ * Returns an async function `({ request }) => Promise<Response>` suitable for
+ * use in a TanStack Start splat route's `server.handlers`.
+ *
+ * The web handler is built lazily on first request and cached.
  *
  * @param api - Your HttpApi contract definition
  * @param options - Server runtime and API implementation layer
  *
  * @example
  * ```ts
- * export const Route = createFileRoute("/api/$")(
- *   mountApi(ApiContract, { runtime: serverRuntime, apiLayer: ApiImplLive })
- * )
+ * // server-runtime.server.ts
+ * export const apiHandler = mountApi(ApiContract, { serverRuntime, apiLayer: ApiImplLive })
+ *
+ * // routes/api.$.ts
+ * export const Route = createFileRoute("/api/$")({
+ *   server: {
+ *     handlers: {
+ *       GET: apiHandler, POST: apiHandler, PUT: apiHandler,
+ *       PATCH: apiHandler, DELETE: apiHandler, OPTIONS: apiHandler,
+ *     },
+ *   },
+ * })
  * ```
  */
 export function mountApi<
@@ -49,7 +62,7 @@ export function mountApi<
 >(
   _api: HttpApi.HttpApi<ApiId, Groups, ApiError, ApiR>,
   options: MountApiOptions<ApiId, Groups, ApiError, ApiR>,
-) {
+): (args: { request: Request }) => Promise<Response> {
   // Build ServerEnvLayer internally — extracts the runtime's context so the
   // HttpApi handlers can access services (e.g. TodosService) from the runtime
   // without building them a second time.
@@ -87,21 +100,8 @@ export function mountApi<
     return handlerPromise;
   }
 
-  const effectHandler = async ({ request }: { request: Request }) => {
+  return async ({ request }: { request: Request }) => {
     const handler = await getApiHandler();
     return handler!(request);
-  };
-
-  return {
-    server: {
-      handlers: {
-        GET: effectHandler,
-        POST: effectHandler,
-        PUT: effectHandler,
-        PATCH: effectHandler,
-        DELETE: effectHandler,
-        OPTIONS: effectHandler,
-      },
-    },
   };
 }

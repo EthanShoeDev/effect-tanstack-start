@@ -1,14 +1,15 @@
 {
-  "name": "effect-tanstack-start",
+  "name": "effect-tanstack-start-monorepo",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
     "dev": "vp run example#dev",
-    "prepare": "vp config"
+    "prepare": "vp config && effect-language-service patch"
   },
   "devDependencies": {
+    "@effect/language-service": "catalog:",
+    "typescript": "catalog:",
     "vite-plus": "catalog:"
   },
   "engines": {

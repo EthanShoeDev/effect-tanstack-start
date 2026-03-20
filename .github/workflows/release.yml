@@ -23,6 +23,6 @@ jobs:
       - run: vp install
 
       - name: Publish to npm
-        run: pnpm publish --filter=./packages/core --access public --no-git-checks
+        run: vp pm publish --filter=./packages/core --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

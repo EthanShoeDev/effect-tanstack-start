@@ -1,5 +1,7 @@
 # effect-tanstack-start
 
+[![npm version](https://img.shields.io/npm/v/effect-tanstack-start)](https://www.npmjs.com/package/effect-tanstack-start)
+
 Seamlessly integrate [Effect](https://effect.website/) `HttpApi` with [TanStack Start](https://tanstack.com/start).
 
 Define your API once as an Effect `HttpApi` contract, mount it on a TanStack Start splat route, and call it from route loaders and components using a single typed client — with zero HTTP overhead at SSR time.

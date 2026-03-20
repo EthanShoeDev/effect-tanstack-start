@@ -1,6 +1,6 @@
 {
   "name": "effect-tanstack-start",
-  "version": "0.0.1-beta.2",
+  "version": "0.0.1",
   "description": "Seamlessly integrate Effect-ts with TanStack Start.",
   "homepage": "https://github.com/EthanShoeDev/effect-tanstack-start#readme",
   "bugs": {

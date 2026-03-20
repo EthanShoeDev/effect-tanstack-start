@@ -364,6 +364,13 @@ TanStack Start route files are loaded in both server and client environments. Th
 
 The library's split entry points (`/server` and `/client`) ensure that importing from `effect-tanstack-start/client` never pulls in server-only code like `@tanstack/react-start/server`.
 
+## Future goals
+
+- Integrate with [TanStack Query](https://tanstack.com/query) and [effect-query](https://github.com/voidhashcom/effect-query) for data fetching with caching, refetching, and optimistic updates
+- Allow the user to define a route loader using an Effect generator function
+- Allow the user to define a `createServerFn` using an Effect generator function (without wrapping the impl in `Effect.runPromise` or `Runtime.runPromise`)
+- Distant goal: a Vite plugin that automatically code-splits an Effect `HttpApi` into per-route SSR chunks, transmuting Effect HttpApi routes into TanStack Start API routes and middleware
+
 ## Acknowledgements
 
 Inspired by:

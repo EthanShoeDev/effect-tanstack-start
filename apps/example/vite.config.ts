@@ -27,6 +27,16 @@ export default defineConfig({
       ],
   test: {
     include: ["test/**/*.test.ts"],
+    // @effect/vitest re-exports vitest APIs via `export * from "vitest"`.
+    // In projects mode, vitest externalizes node_modules by default, so that
+    // re-export resolves to the raw package instead of the runner-contextualized
+    // API, crashing `describe`/`it`. Inlining forces the module runner to
+    // transform the import so the runner context is available.
+    server: {
+      deps: {
+        inline: ["@effect/vitest"],
+      },
+    },
   },
   run: {
     tasks: {

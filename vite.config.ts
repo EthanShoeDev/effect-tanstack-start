@@ -1,6 +1,9 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  test: {
+    projects: ["packages/*", "apps/*"],
+  },
   server: {
     watch: {
       ignored: ["**/docs/cloned-repos-as-docs/**"],

@@ -21,25 +21,19 @@ export default defineConfig({
   },
   run: {
     tasks: {
-      // vp check (fmt + lint + tsgo typecheck) + Effect lints via patched tsc
+      // vp check (fmt + lint + tsgo typecheck) + Effect lints via @effect/tsgo
       "check-all": {
         command: "vp check",
-        dependsOn: ["effect-tanstack-start#typecheck:tsc", "example#typecheck:tsc"],
+        dependsOn: ["effect-tanstack-start#typecheck", "example#typecheck"],
       },
       "check-all:fix": {
         command: "vp check --fix",
-        dependsOn: ["effect-tanstack-start#typecheck:tsc", "example#typecheck:tsc"],
+        dependsOn: ["effect-tanstack-start#typecheck", "example#typecheck"],
       },
       // Orchestrates all checks in parallel, then builds
       ready: {
         command: "vp run example#build",
-        dependsOn: [
-          "check-all",
-          "effect-tanstack-start#typecheck:tsc",
-          "example#typecheck:tsc",
-          "effect-tanstack-start#test",
-          "example#test",
-        ],
+        dependsOn: ["check-all", "effect-tanstack-start#test", "example#test"],
       },
     },
   },

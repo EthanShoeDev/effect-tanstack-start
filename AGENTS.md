@@ -79,11 +79,11 @@ These commands map to their corresponding tools. For example, `vp dev --port 300
 
 ## Use `vp run check-all` instead of `vp check`
 
-This project uses `@effect/language-service` to patch `tsc` with Effect-specific lint diagnostics (e.g. floatingEffect, unnecessaryPipe, tryCatchInEffectGen). These lints only run through patched `tsc`, not through tsgo/tsgolint which powers `vp check`.
+This project uses `@effect/tsgo` for type checking with Effect-specific lint diagnostics built in (e.g. floatingEffect, unnecessaryPipe, tryCatchInEffectGen). These lints run through `effect-tsgo`, not through the plain tsgo that powers `vp check`.
 
-`vp run check-all` runs both `vp check` (fmt + oxlint + tsgo typecheck) and `tsc --noEmit` (Effect lints) in parallel via the Vite+ task runner. Always use this instead of bare `vp check` to catch Effect-specific issues.
+`vp run check-all` runs both `vp check` (fmt + oxlint + tsgo typecheck) and the patched `tsgo --noEmit` (Effect lints) in parallel via the Vite+ task runner. Always use this instead of bare `vp check` to catch Effect-specific issues.
 
 - `vp run check-all` — full check including Effect lints (use this)
 - `vp check` — fast check without Effect lints (incomplete for this project)
-- `vp run typecheck:tsc -r` — only the Effect lints via patched tsc
+- `vp run typecheck -r` — only the Effect lints via @effect/tsgo
 - `vp run ready` — full CI pipeline (check-all + tests + build)

@@ -41,11 +41,7 @@ export default defineConfig({
   run: {
     tasks: {
       typecheck: {
-        command: "tsgo --noEmit",
-        input: [{ auto: true }, "!**/*.tsbuildinfo"],
-      },
-      "typecheck:tsc": {
-        command: "tsc --noEmit",
+        command: "vp exec tsgo --noEmit",
         input: [{ auto: true }, "!**/*.tsbuildinfo"],
       },
     },

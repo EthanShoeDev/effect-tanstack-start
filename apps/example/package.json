@@ -6,7 +6,7 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vp dev",
-    "build": "vp build && tsc --noEmit",
+    "build": "vp build && vp exec tsgo --noEmit",
     "preview": "vp preview",
     "start": "node .output/server/index.mjs",
     "test": "vp test"
@@ -23,10 +23,12 @@
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/platform-node-shared": "catalog:",
+    "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "nitro": "catalog:",
     "typescript": "catalog:",

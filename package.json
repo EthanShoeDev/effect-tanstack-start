@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vp run example#dev",
-    "prepare": "vp config && effect-language-service patch"
+    "prepare": "vp config && effect-tsgo patch"
   },
   "devDependencies": {
-    "@effect/language-service": "catalog:",
+    "@changesets/changelog-github": "catalog:",
+    "@changesets/cli": "catalog:",
+    "@effect/tsgo": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   },

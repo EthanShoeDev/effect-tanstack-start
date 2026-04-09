@@ -3,12 +3,12 @@ import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ location }) => {
-    try {
-      const session = await callApiPromise((api) => api.auth.me());
-      return { user: session };
-    } catch {
-      throw redirect({ to: "/login", search: { redirect: location.href } });
-    }
+    const session = await callApiPromise((api) => api.auth.me(), {
+      catchTags: {
+        Unauthorized: () => redirect({ to: "/login", search: { redirect: location.href } }),
+      },
+    });
+    return { user: session };
   },
   component: () => <Outlet />,
 });

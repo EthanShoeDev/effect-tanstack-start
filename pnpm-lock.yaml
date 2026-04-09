@@ -12,9 +12,6 @@ catalogs:
     '@changesets/cli':
       specifier: ^2.30.0
       version: 2.30.0
-    '@effect/language-service':
-      specifier: ^0.75.1
-      version: 0.75.1
     '@effect/platform':
       specifier: ^0.95.0
       version: 0.95.0
@@ -84,9 +81,6 @@ importers:
       '@changesets/cli':
         specifier: 'catalog:'
         version: 2.30.0(@types/node@25.5.0)
-      '@effect/language-service':
-        specifier: 'catalog:'
-        version: 0.75.1
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.2.1
@@ -375,10 +369,6 @@ packages:
         optional: true
       lmdb:
         optional: true
-
-  '@effect/language-service@0.75.1':
-    resolution: {integrity: sha512-g9xD2tAQgRFpYC2YgpZq02VeSL5fBbFJ0B/g1o+14NuNmwtaYJc7SjiLWAA9eyhJHosNrn6h1Ye+Kx6j5mN0AA==}
-    hasBin: true
 
   '@effect/platform-node-shared@0.58.0':
     resolution: {integrity: sha512-kl8ejYM1xvjRlk+4/R1YzB6A3E3hVWY4jIfEl21uu4S43V0S15gHvcur7iMIEXfJTX1a25EKF+Buef+Yv5wZZQ==}
@@ -2908,8 +2898,6 @@ snapshots:
       '@effect/platform': 0.95.0(effect@3.20.0)
       effect: 3.20.0
       uuid: 11.1.0
-
-  '@effect/language-service@0.75.1': {}
 
   '@effect/platform-node-shared@0.58.0(@effect/cluster@0.57.0(@effect/platform@0.95.0(effect@3.20.0))(@effect/rpc@0.74.0(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(@effect/sql@0.50.0(@effect/experimental@0.59.0(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(@effect/workflow@0.17.0(@effect/experimental@0.59.0(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(@effect/platform@0.95.0(effect@3.20.0))(@effect/rpc@0.74.0(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(effect@3.20.0))(effect@3.20.0))(@effect/platform@0.95.0(effect@3.20.0))(@effect/rpc@0.74.0(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(@effect/sql@0.50.0(@effect/experimental@0.59.0(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(@effect/platform@0.95.0(effect@3.20.0))(effect@3.20.0))(effect@3.20.0)':
     dependencies:

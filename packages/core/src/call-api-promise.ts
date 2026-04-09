@@ -105,6 +105,8 @@ export function makeCallApiPromise<TagId, TagService>(
           // Per-call catchTags takes priority over global
           const handler = perCallCatchTags?.[tag] ?? globalCatchTags?.[tag];
           if (handler) {
+            // Thrown because TanStack Router detects notFound()/redirect() via
+            // thrown sentinels — the handler's return value IS the thing to throw.
             throw handler(error);
           }
         }

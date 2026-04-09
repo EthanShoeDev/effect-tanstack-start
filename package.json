@@ -10,7 +10,6 @@
   "devDependencies": {
     "@changesets/changelog-github": "catalog:",
     "@changesets/cli": "catalog:",
-    "@effect/language-service": "catalog:",
     "@effect/tsgo": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"

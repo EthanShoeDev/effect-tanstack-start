@@ -2,11 +2,14 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   id-token: write
 
 jobs:
@@ -22,20 +25,21 @@ jobs:
 
       - run: vp install
 
-      - name: Copy root README into package
-        run: cp README.md packages/core/README.md
-
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish to npm
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if echo "$VERSION" | grep -q "-"; then
-            npm publish --access public --provenance --tag beta
-          else
-            npm publish --access public --provenance
-          fi
-        working-directory: packages/core
+      - name: Copy root README into package
+        run: cp README.md packages/core/README.md
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: vp exec changeset version
+          publish: vp exec changeset publish
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

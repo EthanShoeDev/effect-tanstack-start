@@ -1,6 +1,7 @@
-import { createFileRoute, useLoaderData, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Effect, Option, Schema } from "effect";
 import { useState } from "react";
+import type { Todo } from "@/api/api-contract";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 const SearchParams = Schema.Struct({
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Todos() {
-  const todos = useLoaderData({ from: "/" });
+  const todos: readonly Todo[] = Route.useLoaderData();
   const { q } = Route.useSearch();
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
@@ -101,9 +102,13 @@ function Todos() {
               checked={todo.completed}
               onChange={() => toggleTodo(todo.id, todo.completed)}
             />
-            <span style={{ textDecoration: todo.completed ? "line-through" : "none" }}>
+            <Link
+              to="/todos/$id"
+              params={{ id: todo.id }}
+              style={{ textDecoration: todo.completed ? "line-through" : "none" }}
+            >
               {todo.title}
-            </span>
+            </Link>
             <button onClick={() => deleteTodo(todo.id)}>x</button>
           </li>
         ))}

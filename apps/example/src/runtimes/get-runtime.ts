@@ -4,6 +4,7 @@
  * Uses createIsomorphicFn to pick the correct runtime at compile time.
  */
 
+import { notFound } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { makeCallApiPromise } from "effect-tanstack-start/client";
 import { ApiClient } from "@/services/api-client-tag";
@@ -14,4 +15,8 @@ export const getRuntime = createIsomorphicFn()
   .server(() => serverRuntime)
   .client(() => clientRuntime);
 
-export const callApiPromise = makeCallApiPromise(ApiClient, getRuntime);
+export const callApiPromise = makeCallApiPromise(ApiClient, getRuntime, {
+  catchTags: {
+    TodoNotFound: () => notFound(),
+  },
+});

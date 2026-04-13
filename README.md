@@ -161,6 +161,7 @@ Uses TanStack Start's `createIsomorphicFn` to pick the correct runtime at compil
 
 ```ts
 // src/runtimes/get-runtime.ts
+import { notFound } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { makeCallApiPromise } from "effect-tanstack-start/client";
 import { ApiClient } from "@/services/api-client-tag";
@@ -171,7 +172,11 @@ export const getRuntime = createIsomorphicFn()
   .server(() => serverRuntime)
   .client(() => clientRuntime);
 
-export const callApiPromise = makeCallApiPromise(ApiClient, getRuntime);
+export const callApiPromise = makeCallApiPromise(ApiClient, getRuntime, {
+  throwOnTag: {
+    TodoNotFound: () => notFound(),
+  },
+});
 ```
 
 ### 7. API splat route
@@ -208,12 +213,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/")({
-  loader: () => callApiPromise((api) => api.todos.list()),
+  loader: ({ abortController }) =>
+    callApiPromise((api) => api.todos.list(), {
+      signal: abortController.signal,
+    }),
   component: Todos,
 });
 ```
 
-This works identically on server (SSR) and client (navigation). At SSR time, the handler is called directly. In the browser, it makes an HTTP request to `/api/todos`.
+This works identically on server (SSR) and client (navigation). At SSR time, the handler is called directly. In the browser, it makes an HTTP request to `/api/todos`. Passing `signal` ensures in-flight API calls are cancelled when the user navigates away.
 
 ### Components
 
@@ -235,18 +243,20 @@ The callback passed to `callApiPromise` returns an `Effect`, so you can compose 
 import { Effect } from "effect";
 
 // Combine multiple API calls
-loader: () =>
-  callApiPromise((api) =>
-    Effect.all({
-      todos: api.todos.list(),
-      stats: api.dashboard.stats(),
-    }),
+loader: ({ abortController }) =>
+  callApiPromise(
+    (api) =>
+      Effect.all({
+        todos: api.todos.list(),
+        stats: api.dashboard.stats(),
+      }),
+    { signal: abortController.signal },
   ),
 ```
 
 ### Protected routes
 
-Use a layout route with `beforeLoad` to check auth before loading child routes:
+Use a layout route with `beforeLoad` to check auth before loading child routes. `throwOnTag` maps Effect error tags to thrown values — TanStack Router intercepts these to trigger redirects, `notFound()`, etc.
 
 ```ts
 // src/routes/_authed.tsx
@@ -254,13 +264,14 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/_authed")({
-  beforeLoad: async ({ location }) => {
-    try {
-      const session = await callApiPromise((api) => api.auth.me());
-      return { user: session };
-    } catch {
-      throw redirect({ to: "/login", search: { redirect: location.href } });
-    }
+  beforeLoad: async ({ location, abortController }) => {
+    const session = await callApiPromise((api) => api.auth.me(), {
+      throwOnTag: {
+        Unauthorized: () => redirect({ to: "/login", search: { redirect: location.href } }),
+      },
+      signal: abortController.signal,
+    });
+    return { user: session };
   },
   component: () => <Outlet />,
 });
@@ -286,15 +297,40 @@ Creates a `Context.Tag` typed from your `HttpApi` contract. The tag's service ty
 
 Both `makeSsrApiClientLayer` and `makeHttpApiClientLayer` provide this tag with different implementations.
 
-#### `makeCallApiPromise(clientTag, getRuntime)`
+#### `makeCallApiPromise(clientTag, getRuntime, options?)`
 
 Creates a convenience function that resolves the `ApiClient` from the appropriate runtime and runs the effect as a `Promise`. Designed for use in route loaders and event handlers.
 
-```ts
-const callApiPromise = makeCallApiPromise(ApiClient, getRuntime);
+Factory-level options:
 
-// Usage — one-liner in a loader
-loader: () => callApiPromise((api) => api.todos.list());
+| Option       | Type                         | Description                                                                                                 |
+| ------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `throwOnTag` | `Record<string, (e) => any>` | Global error mappings — keys are error `_tag` strings, handlers return a value to throw (e.g. `notFound()`) |
+
+Per-call options:
+
+| Option       | Type                         | Description                                                  |
+| ------------ | ---------------------------- | ------------------------------------------------------------ |
+| `throwOnTag` | `Record<string, (e) => any>` | Per-call error mappings — override or extend global mappings |
+| `signal`     | `AbortSignal`                | Abort signal to cancel the underlying Effect fiber           |
+
+```ts
+const callApiPromise = makeCallApiPromise(ApiClient, getRuntime, {
+  throwOnTag: {
+    TodoNotFound: () => notFound(),
+  },
+});
+
+// In a loader — pass signal for cancellation on navigation
+loader: ({ abortController }) =>
+  callApiPromise((api) => api.todos.list(), {
+    signal: abortController.signal,
+  });
+
+// Per-call throwOnTag for context-dependent mappings
+const session = await callApiPromise((api) => api.auth.me(), {
+  throwOnTag: { Unauthorized: () => redirect({ to: "/login" }) },
+});
 ```
 
 #### `makeHttpApiClientLayer(api, clientTag, options?)`

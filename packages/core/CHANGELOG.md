@@ -1,5 +1,13 @@
 # effect-tanstack-start
 
+## 0.2.0
+
+### Minor Changes
+
+- [`47c7afb`](https://github.com/EthanShoeDev/effect-tanstack-start/commit/47c7afb9553afb03c92b4db7304946623e5cf39d) Thanks [@EthanShoeDev](https://github.com/EthanShoeDev)! - Add optional `signal` support and rename `catchTags` to `throwOnTag`
+  - `callApiPromise` now accepts `signal?: AbortSignal` in its options, passed through to Effect's `runPromiseExit` to interrupt the fiber on abort. Enables TanStack Router loaders to forward `abortController.signal`, so in-flight API calls are cancelled on navigation.
+  - **Breaking:** Rename `catchTags` to `throwOnTag` (both global and per-call). The old name implied errors were caught/swallowed, but the handlers actually return values that get **thrown** for TanStack Router to intercept (e.g. `notFound()`, `redirect()`).
+
 ## 0.1.0
 
 ### Minor Changes

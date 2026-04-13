@@ -36,7 +36,7 @@ export type AllClientErrors<C> = { [G in keyof C]: GroupErrors<C[G]> }[keyof C];
 /**
  * Union of `_tag` string literals for all tagged errors in a Client.
  *
- * Useful for constraining `catchTags` keys at the global registration level.
+ * Useful for constraining `throwOnTag` keys at the global registration level.
  */
 export type ClientErrorTags<C> = Extract<AllClientErrors<C>, { readonly _tag: string }>["_tag"];
 

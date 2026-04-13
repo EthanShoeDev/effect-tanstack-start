@@ -3,7 +3,10 @@ import { DateTime } from "effect";
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/todos/$id")({
-  loader: ({ params }) => callApiPromise((api) => api.todos.getById({ path: { id: params.id } })),
+  loader: ({ params, abortController }) =>
+    callApiPromise((api) => api.todos.getById({ path: { id: params.id } }), {
+      signal: abortController.signal,
+    }),
   notFoundComponent: () => (
     <div style={{ padding: 8 }}>
       <h3>Todo not found</h3>

@@ -2,7 +2,8 @@ import { createFileRoute, useLoaderData, useNavigate } from "@tanstack/react-rou
 import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/_authed/dashboard")({
-  loader: () => callApiPromise((api) => api.dashboard.stats()),
+  loader: ({ abortController }) =>
+    callApiPromise((api) => api.dashboard.stats(), { signal: abortController.signal }),
   component: Dashboard,
 });
 

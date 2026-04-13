@@ -12,9 +12,10 @@ type SearchParams = typeof SearchParams.Type;
 export const Route = createFileRoute("/")({
   validateSearch: (input): SearchParams => Schema.decodeUnknownSync(SearchParams)(input),
   loaderDeps: ({ search }) => ({ q: search.q }),
-  loader: ({ deps }) =>
-    callApiPromise((api) =>
-      deps.q ? api.todos.search({ urlParams: { q: deps.q } }) : api.todos.list(),
+  loader: ({ deps, abortController }) =>
+    callApiPromise(
+      (api) => (deps.q ? api.todos.search({ urlParams: { q: deps.q } }) : api.todos.list()),
+      { signal: abortController.signal },
     ),
   component: Todos,
 });

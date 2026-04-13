@@ -16,7 +16,7 @@ export const getRuntime = createIsomorphicFn()
   .client(() => clientRuntime);
 
 export const callApiPromise = makeCallApiPromise(ApiClient, getRuntime, {
-  catchTags: {
+  throwOnTag: {
     TodoNotFound: () => notFound(),
   },
 });

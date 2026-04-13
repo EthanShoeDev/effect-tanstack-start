@@ -17,12 +17,12 @@ const TestLayer = SsrApiClientLive.pipe(
 
 const testRuntime = ManagedRuntime.make(TestLayer);
 
-describe("catchTags", () => {
-  describe("global catchTags", () => {
+describe("throwOnTag", () => {
+  describe("global throwOnTag", () => {
     const NOT_FOUND_SIGNAL = { isNotFound: true };
 
     const callApi = makeCallApiPromise(ApiClient, () => testRuntime, {
-      catchTags: {
+      throwOnTag: {
         TodoNotFound: () => NOT_FOUND_SIGNAL,
       },
     });
@@ -45,7 +45,7 @@ describe("catchTags", () => {
     });
   });
 
-  describe("per-call catchTags", () => {
+  describe("per-call throwOnTag", () => {
     const callApi = makeCallApiPromise(ApiClient, () => testRuntime);
 
     it("throws the per-call handler's return value", async () => {
@@ -53,7 +53,7 @@ describe("catchTags", () => {
 
       await expect(
         callApi((api) => api.auth.me(), {
-          catchTags: {
+          throwOnTag: {
             Unauthorized: () => REDIRECT_SIGNAL,
           },
         }),
@@ -72,7 +72,7 @@ describe("catchTags", () => {
     const PER_CALL_SIGNAL = { source: "per-call" };
 
     const callApi = makeCallApiPromise(ApiClient, () => testRuntime, {
-      catchTags: {
+      throwOnTag: {
         TodoNotFound: () => GLOBAL_SIGNAL,
       },
     });
@@ -80,7 +80,7 @@ describe("catchTags", () => {
     it("per-call handler wins over global for the same tag", async () => {
       await expect(
         callApi((api) => api.todos.getById({ path: { id: "nonexistent" } }), {
-          catchTags: {
+          throwOnTag: {
             TodoNotFound: () => PER_CALL_SIGNAL,
           },
         }),
@@ -95,7 +95,7 @@ describe("catchTags", () => {
       let capturedError: unknown;
 
       await callApi((api) => api.todos.getById({ path: { id: "missing-123" } }), {
-        catchTags: {
+        throwOnTag: {
           TodoNotFound: (error) => {
             capturedError = error;
             return { handled: true };

@@ -287,6 +287,10 @@ Define auth middleware in your API contract using `HttpApiSecurity` and `HttpApi
 
 See the [example app](apps/example/) for a complete auth implementation with cookie-based sessions, login/logout, and protected routes.
 
+## Using with TanStack Query (effect-query)
+
+Integration with [`effect-query`](https://github.com/voidhashcom/effect-query) is a work in progress. The basics — isomorphic factory + component `useQuery` — work without any library changes, but the loader path has unresolved tension around router sentinels (`notFound()` / `redirect()`) when error wrapping is in play. See [`docs/wip-effect-query.md`](./docs/wip-effect-query.md) for the current state, the tensions, and the patterns we've evaluated.
+
 ## API Reference
 
 ### `effect-tanstack-start/client`

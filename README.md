@@ -18,12 +18,12 @@ This package ships two parallel release lines so you don't have to wait on the E
 Effect v4 is a major release with significant API changes (`@effect/platform` is consolidated into `effect/unstable/*`, `Context.Tag` becomes `Context.Service`, `HttpApiBuilder.api` becomes `HttpApiBuilder.layer`, endpoints take an options object, etc.). The 1.x line of this package follows those changes; the 0.x line stays on the stable Effect v3 surface.
 
 ```sh
-# Effect v3 (stable)
-npm install effect-tanstack-start@v3-latest
+# Effect v3 (stable) — `latest` dist-tag
+npm install effect-tanstack-start
 npm install effect @effect/platform @tanstack/react-start @tanstack/react-router react
 
-# Effect v4 (beta — tracks the latest effect@4.0.0-beta.*)
-npm install effect-tanstack-start@v4-latest
+# Effect v4 (beta — tracks the latest effect@4.0.0-beta.*) — `beta` dist-tag
+npm install effect-tanstack-start@beta
 npm install effect @tanstack/react-start @tanstack/react-router react
 ```
 

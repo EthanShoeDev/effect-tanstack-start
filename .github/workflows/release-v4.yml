@@ -13,10 +13,14 @@ permissions:
   id-token: write
 
 # Parallel release line for the Effect v4 beta. Mirrors `release.yml` but
-# triggers on the `effect-v4` branch and publishes under the `v4` npm dist-tag
-# so it doesn't shadow the `latest` (Effect v3) line. The changesets state
-# (including `.changeset/pre.json`) is per-branch in git, so prerelease
-# versioning (1.0.0-beta.N) is isolated to this branch.
+# triggers on the `effect-v4` branch. While `.changeset/pre.json` is present
+# (pre mode, tag = "beta"), `changeset publish` automatically tags releases
+# with the pre-mode tag (`beta`), so we don't pass `--tag` ourselves — doing
+# so errors with "Releasing under custom tag is not allowed in pre mode".
+#
+# Net effect: 1.0.0-beta.N versions land under the `beta` npm dist-tag.
+# `npm install effect-tanstack-start` keeps installing 0.x (the `latest`
+# Effect v3 line); opt in to v4 with `npm install effect-tanstack-start@beta`.
 
 jobs:
   release:
@@ -44,7 +48,7 @@ jobs:
         uses: changesets/action@v1
         with:
           version: vp exec changeset version
-          publish: vp exec changeset publish --tag v4
+          publish: vp exec changeset publish
           title: "chore: version packages (Effect v4 beta)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

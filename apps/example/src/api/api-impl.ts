@@ -1,12 +1,13 @@
 /**
  * API implementation — all group handlers composed into a single Layer.
  *
- * Each group is implemented via HttpApiBuilder.group() and provided to
- * HttpApiBuilder.api(). If you have multiple groups, compose them all here.
+ * v4 pattern: merge `HttpApiBuilder.layer(api)` with each group's Layer and
+ * any middleware Layers. The combined Layer is consumed by both the
+ * SSR client and the HTTP handler (`mountApi`).
  */
 
-import { HttpApiBuilder } from "@effect/platform";
 import { Effect, Layer } from "effect";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { ApiContract } from "./api-contract";
 import { AuthGroupLive, AuthMiddlewareLive, DashboardGroupLive } from "./auth-impl";
 import { TodosService } from "../services/todos-service";
@@ -20,18 +21,18 @@ const TodosGroupLive = HttpApiBuilder.group(ApiContract, "todos", (handlers) =>
         return yield* todos.list;
       }),
     )
-    .handle("search", ({ urlParams }) =>
+    .handle("search", ({ query }) =>
       Effect.gen(function* () {
         const todos = yield* TodosService;
         const all = yield* todos.list;
-        const query = urlParams.q.toLowerCase();
-        return all.filter((t) => t.title.toLowerCase().includes(query));
+        const q = query.q.toLowerCase();
+        return all.filter((t) => t.title.toLowerCase().includes(q));
       }),
     )
-    .handle("getById", ({ path }) =>
+    .handle("getById", ({ params }) =>
       Effect.gen(function* () {
         const todos = yield* TodosService;
-        return yield* todos.getById(path.id);
+        return yield* todos.getById(params.id);
       }),
     )
     .handle("create", ({ payload }) =>
@@ -40,27 +41,31 @@ const TodosGroupLive = HttpApiBuilder.group(ApiContract, "todos", (handlers) =>
         return yield* todos.create(payload);
       }),
     )
-    .handle("update", ({ path, payload }) =>
+    .handle("update", ({ params, payload }) =>
       Effect.gen(function* () {
         const todos = yield* TodosService;
-        return yield* todos.update(path.id, payload);
+        return yield* todos.update(params.id, payload);
       }),
     )
-    .handle("remove", ({ path }) =>
+    .handle("remove", ({ params }) =>
       Effect.gen(function* () {
         const todos = yield* TodosService;
-        return yield* todos.remove(path.id);
+        return yield* todos.remove(params.id);
       }),
     ),
 );
 
-// Compose all groups into the full API implementation.
+// Compose all groups + the api registration into the full API Layer.
+// `HttpApiBuilder.layer(api)` depends on each group's ApiGroup<...> service,
+// so the groups must be provided to it via `provideMerge`. The middleware layer
+// is in turn required by the auth + dashboard group layers.
+//
 // Stateful services (TodosService, SessionStore) are NOT provided here —
-// they must come from the runtime so that the SSR client and HTTP handler
+// they come from the runtime so that the SSR client and HTTP handler
 // share the same instances (same Ref, same in-memory state).
-export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
-  Layer.provide(TodosGroupLive),
-  Layer.provide(AuthGroupLive),
-  Layer.provide(DashboardGroupLive),
-  Layer.provide(AuthMiddlewareLive),
+export const ApiImplLive = HttpApiBuilder.layer(ApiContract).pipe(
+  Layer.provideMerge(TodosGroupLive),
+  Layer.provideMerge(AuthGroupLive),
+  Layer.provideMerge(DashboardGroupLive),
+  Layer.provideMerge(AuthMiddlewareLive),
 );

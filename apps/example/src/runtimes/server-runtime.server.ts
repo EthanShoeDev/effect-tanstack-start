@@ -1,26 +1,24 @@
-import { makeSsrApiClientLayer, mountApi } from "effect-tanstack-start/server";
 import { Layer, Logger, ManagedRuntime } from "effect";
-import { globalValue } from "effect/GlobalValue";
+import { makeSsrApiClientLayer, mountApi } from "effect-tanstack-start/server";
 import { ApiContract } from "@/api/api-contract";
 import { ApiImplLive } from "@/api/api-impl";
-import { SessionStore } from "@/services/session-store";
-import { TodosService } from "@/services/todos-service";
 import { ApiClient } from "@/services/api-client-tag";
+import { SessionStoreLive } from "@/services/session-store";
+import { TodosServiceLive } from "@/services/todos-service";
 
 const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient);
 
-export const serverRuntime = globalValue("ServerRuntime", () => {
-  // Stateful services are provided here so that both the SSR client and
-  // the HTTP handler (mountApi) share the same instances.
-  const ServerLayer = SsrApiClientLive.pipe(
-    Layer.provideMerge(TodosService.Default),
-    Layer.provideMerge(SessionStore.Default),
-    Layer.provideMerge(Logger.pretty),
-  );
-  const runtime = ManagedRuntime.make(ServerLayer);
-  process.on("SIGINT", () => void runtime.dispose());
-  process.on("SIGTERM", () => void runtime.dispose());
-  return runtime;
-});
+// Stateful services are provided here so that both the SSR client and
+// the HTTP handler (mountApi) share the same instances.
+const ServerLayer = SsrApiClientLive.pipe(
+  Layer.provideMerge(TodosServiceLive),
+  Layer.provideMerge(SessionStoreLive),
+  Layer.provideMerge(Logger.layer([Logger.consolePretty()])),
+);
+
+export const serverRuntime = ManagedRuntime.make(ServerLayer);
+
+process.on("SIGINT", () => void serverRuntime.dispose());
+process.on("SIGTERM", () => void serverRuntime.dispose());
 
 export const apiHandler = mountApi(ApiContract, { serverRuntime, apiLayer: ApiImplLive });

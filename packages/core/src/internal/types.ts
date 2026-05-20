@@ -4,15 +4,15 @@
  */
 
 import type { Effect } from "effect";
-import type { HttpApi, HttpApiClient, HttpApiGroup } from "@effect/platform";
+import type { HttpApi, HttpApiClient, HttpApiGroup } from "effect/unstable/httpapi";
 
 /**
  * Derives the full typed client from an HttpApi definition.
  * Preserves strongly typed errors (e.g. TodoNotFound) per endpoint.
  */
-export type ClientOf<Api extends HttpApi.HttpApi<string, HttpApiGroup.HttpApiGroup.Any, any, any>> =
-  Api extends HttpApi.HttpApi<infer _Id, infer Groups, infer E, infer _R>
-    ? HttpApiClient.Client<Groups, E, never>
+export type ClientOf<Api extends HttpApi.HttpApi<string, HttpApiGroup.Any>> =
+  Api extends HttpApi.HttpApi<infer _Id, infer Groups>
+    ? HttpApiClient.Client<Groups, never, never>
     : never;
 
 // ── Error extraction from Client shape ────────────────────────────────

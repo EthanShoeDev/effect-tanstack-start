@@ -1,12 +1,11 @@
+import { Context, Schema } from "effect";
 import {
   HttpApi,
   HttpApiEndpoint,
   HttpApiGroup,
   HttpApiMiddleware,
-  HttpApiSchema,
   HttpApiSecurity,
-} from "@effect/platform";
-import { Context, Schema } from "effect";
+} from "effect/unstable/httpapi";
 
 // ── Todos ──────────────────────────────────────────────────────────────
 
@@ -19,51 +18,51 @@ export const Todo = Schema.Struct({
 export type Todo = typeof Todo.Type;
 
 export const CreateTodoInput = Schema.Struct({
-  title: Schema.String.pipe(Schema.minLength(1)),
+  title: Schema.String.check(Schema.isMinLength(1)),
 });
 export type CreateTodoInput = typeof CreateTodoInput.Type;
 
 export const UpdateTodoInput = Schema.Struct({
-  title: Schema.optionalWith(Schema.String.pipe(Schema.minLength(1)), {
-    as: "Option",
-  }),
-  completed: Schema.optionalWith(Schema.Boolean, { as: "Option" }),
+  title: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  completed: Schema.optional(Schema.Boolean),
 });
 export type UpdateTodoInput = typeof UpdateTodoInput.Type;
 
-export class TodoNotFound extends Schema.TaggedError<TodoNotFound>()(
+export class TodoNotFound extends Schema.TaggedErrorClass<TodoNotFound>()(
   "TodoNotFound",
   { id: Schema.String },
-  HttpApiSchema.annotations({ status: 404 }),
+  { httpApiStatus: 404 },
 ) {}
 
-export class TodosApiGroup extends HttpApiGroup.make("todos")
-  .add(HttpApiEndpoint.get("list", "/todos").addSuccess(Schema.Array(Todo)))
-  .add(
-    HttpApiEndpoint.get("search", "/todos/search")
-      .setUrlParams(Schema.Struct({ q: Schema.String }))
-      .addSuccess(Schema.Array(Todo)),
-  )
-  .add(
-    HttpApiEndpoint.get("getById", "/todos/:id")
-      .setPath(Schema.Struct({ id: Schema.String }))
-      .addSuccess(Todo)
-      .addError(TodoNotFound),
-  )
-  .add(HttpApiEndpoint.post("create", "/todos").setPayload(CreateTodoInput).addSuccess(Todo))
-  .add(
-    HttpApiEndpoint.patch("update", "/todos/:id")
-      .setPath(Schema.Struct({ id: Schema.String }))
-      .setPayload(UpdateTodoInput)
-      .addSuccess(Todo)
-      .addError(TodoNotFound),
-  )
-  .add(
-    HttpApiEndpoint.del("remove", "/todos/:id")
-      .setPath(Schema.Struct({ id: Schema.String }))
-      .addSuccess(Schema.Void)
-      .addError(TodoNotFound),
-  ) {}
+export class TodosApiGroup extends HttpApiGroup.make("todos").add(
+  HttpApiEndpoint.get("list", "/todos", {
+    success: Schema.Array(Todo),
+  }),
+  HttpApiEndpoint.get("search", "/todos/search", {
+    query: { q: Schema.String },
+    success: Schema.Array(Todo),
+  }),
+  HttpApiEndpoint.get("getById", "/todos/:id", {
+    params: { id: Schema.String },
+    success: Todo,
+    error: TodoNotFound,
+  }),
+  HttpApiEndpoint.post("create", "/todos", {
+    payload: CreateTodoInput,
+    success: Todo,
+  }),
+  HttpApiEndpoint.patch("update", "/todos/:id", {
+    params: { id: Schema.String },
+    payload: UpdateTodoInput,
+    success: Todo,
+    error: TodoNotFound,
+  }),
+  HttpApiEndpoint.delete("remove", "/todos/:id", {
+    params: { id: Schema.String },
+    success: Schema.Void,
+    error: TodoNotFound,
+  }),
+) {}
 
 // ── Auth ───────────────────────────────────────────────────────────────
 
@@ -72,18 +71,18 @@ export const Session = Schema.Struct({
 });
 export type Session = typeof Session.Type;
 
-export class CurrentSession extends Context.Tag("CurrentSession")<CurrentSession, Session>() {}
+export class CurrentSession extends Context.Service<CurrentSession, Session>()("CurrentSession") {}
 
-export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
+export class Unauthorized extends Schema.TaggedErrorClass<Unauthorized>()(
   "Unauthorized",
   {},
-  HttpApiSchema.annotations({ status: 401 }),
+  { httpApiStatus: 401 },
 ) {}
 
-export class LoginFailed extends Schema.TaggedError<LoginFailed>()(
+export class LoginFailed extends Schema.TaggedErrorClass<LoginFailed>()(
   "LoginFailed",
   { message: Schema.String },
-  HttpApiSchema.annotations({ status: 403 }),
+  { httpApiStatus: 403 },
 ) {}
 
 export const sessionSecurity = HttpApiSecurity.apiKey({
@@ -91,21 +90,25 @@ export const sessionSecurity = HttpApiSecurity.apiKey({
   key: "session",
 });
 
-export class AuthMiddleware extends HttpApiMiddleware.Tag<AuthMiddleware>()("AuthMiddleware", {
-  provides: CurrentSession,
-  failure: Unauthorized,
+export class AuthMiddleware extends HttpApiMiddleware.Service<
+  AuthMiddleware,
+  { provides: CurrentSession }
+>()("AuthMiddleware", {
+  error: Unauthorized,
   security: { session: sessionSecurity },
 }) {}
 
-export class AuthApiGroup extends HttpApiGroup.make("auth")
-  .add(
-    HttpApiEndpoint.post("login", "/auth/login")
-      .setPayload(Schema.Struct({ username: Schema.String }))
-      .addSuccess(Session)
-      .addError(LoginFailed),
-  )
-  .add(HttpApiEndpoint.post("logout", "/auth/logout").addSuccess(Schema.Void))
-  .add(HttpApiEndpoint.get("me", "/auth/me").addSuccess(Session).middleware(AuthMiddleware)) {}
+export class AuthApiGroup extends HttpApiGroup.make("auth").add(
+  HttpApiEndpoint.post("login", "/auth/login", {
+    payload: Schema.Struct({ username: Schema.String }),
+    success: Session,
+    error: LoginFailed,
+  }),
+  HttpApiEndpoint.post("logout", "/auth/logout", {
+    success: Schema.Void,
+  }),
+  HttpApiEndpoint.get("me", "/auth/me", { success: Session }).middleware(AuthMiddleware),
+) {}
 
 // ── Dashboard (all endpoints require auth) ─────────────────────────────
 
@@ -117,13 +120,15 @@ export const DashboardStats = Schema.Struct({
 export type DashboardStats = typeof DashboardStats.Type;
 
 export class DashboardApiGroup extends HttpApiGroup.make("dashboard")
-  .add(HttpApiEndpoint.get("stats", "/dashboard/stats").addSuccess(DashboardStats))
+  .add(
+    HttpApiEndpoint.get("stats", "/dashboard/stats", {
+      success: DashboardStats,
+    }),
+  )
   .middleware(AuthMiddleware) {}
 
 // ── API Contract ───────────────────────────────────────────────────────
 
 export class ApiContract extends HttpApi.make("api")
-  .add(TodosApiGroup)
-  .add(AuthApiGroup)
-  .add(DashboardApiGroup)
+  .add(TodosApiGroup, AuthApiGroup, DashboardApiGroup)
   .prefix("/api") {}

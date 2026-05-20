@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { useState } from "react";
 import type { Todo } from "@/api/api-contract";
 import { callApiPromise } from "@/runtimes/get-runtime";
@@ -14,14 +14,14 @@ export const Route = createFileRoute("/")({
   loaderDeps: ({ search }) => ({ q: search.q }),
   loader: ({ deps, abortController }) =>
     callApiPromise(
-      (api) => (deps.q ? api.todos.search({ urlParams: { q: deps.q } }) : api.todos.list()),
+      (api) => (deps.q ? api.todos.search({ query: { q: deps.q } }) : api.todos.list()),
       { signal: abortController.signal },
     ),
   component: Todos,
 });
 
 function Todos() {
-  const todos: readonly Todo[] = Route.useLoaderData();
+  const todos: ReadonlyArray<Todo> = Route.useLoaderData();
   const { q } = Route.useSearch();
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
@@ -50,8 +50,8 @@ function Todos() {
     void callApiPromise((api) =>
       api.todos
         .update({
-          path: { id },
-          payload: { title: Option.none(), completed: Option.some(!completed) },
+          params: { id },
+          payload: { completed: !completed },
         })
         .pipe(
           Effect.tap(() =>
@@ -64,7 +64,7 @@ function Todos() {
   const deleteTodo = (id: string) => {
     void callApiPromise((api) =>
       api.todos
-        .remove({ path: { id } })
+        .remove({ params: { id } })
         .pipe(
           Effect.tap(() =>
             Effect.sync(() => void navigate({ to: "/", search: { q: q || undefined } })),

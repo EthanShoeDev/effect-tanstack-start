@@ -5,21 +5,19 @@
  * that you can assign to every HTTP method in a splat route's `server.handlers`.
  */
 
-import { Context, Effect, Layer, type ManagedRuntime, type Runtime } from "effect";
-import {
-  HttpApiBuilder,
-  HttpApp,
-  HttpMiddleware,
-  HttpServer,
-  type HttpApi,
-  type HttpApiGroup,
-} from "@effect/platform";
+import { type Context, Effect, Layer, type ManagedRuntime } from "effect";
+import { HttpRouter } from "effect/unstable/http";
+import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 
 export interface MountApiOptions {
   /** The server ManagedRuntime. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required for ManagedRuntime variance
   readonly serverRuntime: ManagedRuntime.ManagedRuntime<any, any>;
-  /** The composed API implementation Layer (HttpApiBuilder.api(Contract).pipe(...)). */
+  /**
+   * The composed API implementation Layer. Should include `HttpApiBuilder.layer(api)`
+   * merged with your group layers, e.g.
+   * `Layer.mergeAll(HttpApiBuilder.layer(Contract), TodosGroupLive)`.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required for Layer variance
   readonly apiLayer: Layer.Layer<any, any, any>;
 }
@@ -51,54 +49,47 @@ export interface MountApiOptions {
  * })
  * ```
  */
-export function mountApi<
-  ApiId extends string,
-  Groups extends HttpApiGroup.HttpApiGroup.Any,
-  ApiError,
-  ApiR,
->(
-  _api: HttpApi.HttpApi<ApiId, Groups, ApiError, ApiR>,
+export function mountApi<ApiId extends string, Groups extends HttpApiGroup.Any>(
+  _api: HttpApi.HttpApi<ApiId, Groups>,
   options: MountApiOptions,
 ): (args: { request: Request }) => Promise<Response> {
-  // Build ServerEnvLayer internally — extracts the runtime's context so the
-  // HttpApi handlers can access services (e.g. TodosService) from the runtime
-  // without building them a second time.
+  // Build ServerEnvLayer internally — exposes the runtime's context to the
+  // HttpApi handlers so services (e.g. TodosService) come from the runtime
+  // without being built a second time.
   const serverEnvLayer = Layer.effectContext(
-    options.serverRuntime.runtimeEffect.pipe(
-      Effect.map((r: Runtime.Runtime<unknown>) => r.context as Context.Context<never>),
+    options.serverRuntime.contextEffect.pipe(
+      Effect.map((ctx: Context.Context<unknown>) => ctx as Context.Context<never>),
     ),
   );
 
-  const MyApiLive = options.apiLayer.pipe(Layer.provide(serverEnvLayer));
+  // Cast: `HttpApiBuilder.layer(api)` (inside `options.apiLayer`) declares `HttpRouter`
+  // as a requirement so it can register routes with the router. We hand that off to
+  // `HttpRouter.toWebHandler` below, which supplies `HttpRouter.layer` internally —
+  // i.e. the unmet `HttpRouter.HttpRouter` requirement here is satisfied by
+  // `toWebHandler`, not by us.
+  const composedApiLayer = options.apiLayer.pipe(Layer.provide(serverEnvLayer)) as Layer.Layer<
+    unknown,
+    unknown,
+    HttpRouter.HttpRouter
+  >;
 
-  const ApiLayer = MyApiLive.pipe(Layer.provideMerge(HttpServer.layerContext));
+  // `HttpRouter.toWebHandler` lazily builds the layer (merging in `HttpRouter.layer`)
+  // on first request, caches it, and returns a Fetch-compatible request handler.
+  // It also wraps the chain with `HttpMiddleware.logger` by default, which preserves
+  // the request logging that the v3 implementation set up explicitly. Pass
+  // `disableLogger: true` to opt out if you wire logging elsewhere.
+  let handlerCache: ((request: Request) => Promise<Response>) | undefined;
 
-  let handlerPromise: Promise<(request: Request) => Promise<Response>> | undefined;
-
-  function getApiHandler() {
-    handlerPromise ??= options.serverRuntime.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const runtime = yield* options.serverRuntime.runtimeEffect;
-
-          const fullLayer = ApiLayer.pipe(
-            Layer.provideMerge(HttpApiBuilder.Router.Live),
-            Layer.provideMerge(HttpApiBuilder.Middleware.layer),
-          );
-          const apiRuntime = yield* Layer.toRuntime(fullLayer);
-          const app = yield* Effect.provide(HttpApiBuilder.httpApp, apiRuntime);
-
-          return HttpApp.toWebHandlerRuntime(runtime)(
-            HttpMiddleware.logger(app as HttpApp.Default),
-          );
-        }),
-      ),
-    );
-    return handlerPromise;
+  function getHandler(): (request: Request) => Promise<Response> {
+    if (handlerCache !== undefined) {
+      return handlerCache;
+    }
+    const result = HttpRouter.toWebHandler(composedApiLayer);
+    handlerCache = result.handler as (request: Request) => Promise<Response>;
+    return handlerCache;
   }
 
   return async ({ request }: { request: Request }) => {
-    const handler = await getApiHandler();
-    return handler(request);
+    return getHandler()(request);
   };
 }

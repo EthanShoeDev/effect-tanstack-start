@@ -1,16 +1,13 @@
 /**
- * Creates a Layer providing the ApiClient tag via HTTP (for client-side runtime).
+ * Creates a Layer providing the ApiClient key via HTTP (for client-side runtime).
  * Uses HttpApiClient.make + FetchHttpClient under the hood.
  */
 
-import { Context, Effect, Layer } from "effect";
-import {
-  FetchHttpClient,
-  HttpApiClient,
-  HttpClient,
-  type HttpApi,
-  type HttpApiGroup,
-} from "@effect/platform";
+import { type Context, Effect, Layer } from "effect";
+import type { HttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/unstable/http";
+import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApiClient } from "effect/unstable/httpapi";
 
 /**
  * Create a Layer that provides the ApiClient via HTTP fetch.
@@ -20,7 +17,7 @@ import {
  * are passed through. The `baseUrl` defaults to `window.location.origin` in the browser.
  *
  * @param api - Your HttpApi contract definition
- * @param clientTag - The ApiClient tag (from makeApiClientTag)
+ * @param clientTag - The ApiClient key (from makeApiClientTag)
  * @param options - Options forwarded to HttpApiClient.make
  *
  * @example
@@ -30,12 +27,10 @@ import {
  */
 export function makeHttpApiClientLayer<
   ApiId extends string,
-  Groups extends HttpApiGroup.HttpApiGroup.Any,
-  ApiError,
-  ApiR,
-  ClientTag extends Context.Tag<any, any>,
+  Groups extends HttpApiGroup.Any,
+  ClientTag extends Context.Service<any, any>,
 >(
-  api: HttpApi.HttpApi<ApiId, Groups, ApiError, ApiR>,
+  api: HttpApi.HttpApi<ApiId, Groups>,
   clientTag: ClientTag,
   options?: {
     readonly baseUrl?: URL | string | undefined;
@@ -43,23 +38,27 @@ export function makeHttpApiClientLayer<
       | ((client: HttpClient.HttpClient) => HttpClient.HttpClient)
       | undefined;
     readonly transformResponse?:
-      | ((effect: Effect.Effect<unknown, unknown>) => Effect.Effect<unknown, unknown>)
+      | ((
+          effect: Effect.Effect<unknown, unknown, unknown>,
+        ) => Effect.Effect<unknown, unknown, unknown>)
       | undefined;
   },
-): Layer.Layer<Context.Tag.Identifier<ClientTag>> {
+): Layer.Layer<Context.Service.Identifier<ClientTag>> {
   const baseUrl =
     options?.baseUrl?.toString() ??
     (typeof globalThis !== "undefined" && "location" in globalThis
-      ? (globalThis as any).location.origin
+      ? (globalThis as unknown as { readonly location: { readonly origin: string } }).location
+          .origin
       : "http://localhost:3000");
 
-  return Layer.effect(
-    clientTag,
+  return Layer.effect(clientTag)(
     Effect.gen(function* () {
       return (yield* HttpApiClient.make(api, {
         ...options,
         baseUrl,
-      })) as Context.Tag.Service<ClientTag>;
+      })) as Context.Service.Shape<ClientTag>;
     }),
-  ).pipe(Layer.provide(FetchHttpClient.layer)) as Layer.Layer<Context.Tag.Identifier<ClientTag>>;
+  ).pipe(Layer.provide(FetchHttpClient.layer)) as Layer.Layer<
+    Context.Service.Identifier<ClientTag>
+  >;
 }

@@ -17,7 +17,7 @@ function Login() {
     void callApiPromise((api) =>
       api.auth.login({ payload: { username } }).pipe(
         Effect.tap(() => Effect.sync(() => void navigate({ to: "/dashboard" }))),
-        Effect.catchAll((e) => Effect.sync(() => setError(e.message ?? "Login failed"))),
+        Effect.catch((e) => Effect.sync(() => setError(e.message ?? "Login failed"))),
       ),
     );
   };

@@ -6,6 +6,29 @@ Seamlessly integrate [Effect](https://effect.website/) `HttpApi` with [TanStack 
 
 Define your API once as an Effect `HttpApi` contract, mount it on a TanStack Start splat route, and call it from route loaders and components using a single typed client — with zero HTTP overhead at SSR time.
 
+## Versioning — Effect v3 vs Effect v4
+
+This package ships two parallel release lines so you don't have to wait on the Effect v4 beta to use it:
+
+| Package version             | Effect version                        | Branch                                                                              | Status                       |
+| --------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
+| `effect-tanstack-start@0.x` | `effect@^3.20.0` + `@effect/platform` | [`main`](https://github.com/EthanShoeDev/effect-tanstack-start/tree/main)           | Maintained for bug fixes     |
+| `effect-tanstack-start@1.x` | `effect@^4.0.0-beta`                  | [`effect-v4`](https://github.com/EthanShoeDev/effect-tanstack-start/tree/effect-v4) | Beta, tracks Effect v4 betas |
+
+Effect v4 is a major release with significant API changes (`@effect/platform` is consolidated into `effect/unstable/*`, `Context.Tag` becomes `Context.Service`, `HttpApiBuilder.api` becomes `HttpApiBuilder.layer`, endpoints take an options object, etc.). The 1.x line of this package follows those changes; the 0.x line stays on the stable Effect v3 surface.
+
+```sh
+# Effect v3 (stable)
+npm install effect-tanstack-start@v3-latest
+npm install effect @effect/platform @tanstack/react-start @tanstack/react-router react
+
+# Effect v4 (beta — tracks the latest effect@4.0.0-beta.*)
+npm install effect-tanstack-start@v4-latest
+npm install effect @tanstack/react-start @tanstack/react-router react
+```
+
+The rest of this README documents the **v1.x / Effect v4** API. The v3 docs live on the [`main`](https://github.com/EthanShoeDev/effect-tanstack-start/tree/main#readme) branch.
+
 ## How it works
 
 Effect `HttpApi` gives you a typed API contract, typed handlers, and a derived typed client. TanStack Start gives you isomorphic route loaders that run on both server and client.
@@ -14,31 +37,31 @@ This library bridges them:
 
 - **At SSR time** — the client calls your handlers directly as Effect functions. No HTTP request, no serialization overhead, no URL routing. Same result as if you called the handler yourself.
 - **In the browser** — the client makes real HTTP requests to your API splat route, using Effect's `HttpApiClient` with `fetch`.
-- **Same typed interface** — both environments use the same `Context.Tag`. Your route loaders and components don't know or care which one they're using.
+- **Same typed interface** — both environments use the same `Context.Service` key. Your route loaders and components don't know or care which one they're using.
 
 The library exports two entry points:
 
 - `effect-tanstack-start/server` — SSR client layer, API route handler (server-only, imports `@tanstack/react-start/server` internally)
-- `effect-tanstack-start/client` — HTTP client layer, shared tag, call helper (safe for both environments)
+- `effect-tanstack-start/client` — HTTP client layer, shared key, call helper (safe for both environments)
 
 ## Install
 
 ```sh
 npm install effect-tanstack-start
-# peer dependencies
-npm install effect @effect/platform @tanstack/react-start @tanstack/react-router react
+# peer dependencies (note: no @effect/platform — v4 consolidated it into effect)
+npm install effect @tanstack/react-start @tanstack/react-router react
 ```
 
 ## Setup
 
 ### 1. API contract
 
-Define your API using Effect `HttpApi`. This is standard Effect — nothing library-specific here.
+Define your API using Effect `HttpApi`. This is standard Effect v4 — nothing library-specific here.
 
 ```ts
 // src/api/api-contract.ts
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "@effect/platform";
 import { Schema } from "effect";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 
 export const Todo = Schema.Struct({
   id: Schema.String,
@@ -47,56 +70,61 @@ export const Todo = Schema.Struct({
   createdAt: Schema.DateTimeUtc,
 });
 
-export class TodoNotFound extends Schema.TaggedError<TodoNotFound>()(
+export class TodoNotFound extends Schema.TaggedErrorClass<TodoNotFound>()(
   "TodoNotFound",
   { id: Schema.String },
-  HttpApiSchema.annotations({ status: 404 }),
+  { httpApiStatus: 404 },
 ) {}
 
-export class TodosApiGroup extends HttpApiGroup.make("todos")
-  .add(HttpApiEndpoint.get("list", "/todos").addSuccess(Schema.Array(Todo)))
-  .add(
-    HttpApiEndpoint.get("getById", "/todos/:id")
-      .setPath(Schema.Struct({ id: Schema.String }))
-      .addSuccess(Todo)
-      .addError(TodoNotFound),
-  )
-  .add(
-    HttpApiEndpoint.post("create", "/todos")
-      .setPayload(Schema.Struct({ title: Schema.String }))
-      .addSuccess(Todo),
-  ) {}
+export class TodosApiGroup extends HttpApiGroup.make("todos").add(
+  HttpApiEndpoint.get("list", "/todos", {
+    success: Schema.Array(Todo),
+  }),
+  HttpApiEndpoint.get("getById", "/todos/:id", {
+    params: { id: Schema.String },
+    success: Todo,
+    error: TodoNotFound,
+  }),
+  HttpApiEndpoint.post("create", "/todos", {
+    payload: Schema.Struct({ title: Schema.String }),
+    success: Todo,
+  }),
+) {}
 
 export class ApiContract extends HttpApi.make("api").add(TodosApiGroup).prefix("/api") {}
 ```
 
 ### 2. API implementation
 
-Implement your handlers with `HttpApiBuilder`. Also standard Effect.
+Implement your handlers with `HttpApiBuilder`. In v4, you compose `HttpApiBuilder.layer(api)` with each group's `HttpApiBuilder.group(...)` layer via `Layer.provideMerge`.
 
 **Important:** Don't provide stateful services (those backed by `Ref`, database connections, etc.) inside `ApiImplLive`. They should come from the runtime so that both the SSR client and HTTP handler share the same instances.
 
 ```ts
 // src/api/api-impl.ts
-import { HttpApiBuilder } from "@effect/platform";
 import { Effect, Layer } from "effect";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { ApiContract } from "./api-contract";
 import { TodosService } from "../services/todos-service";
 
 const TodosGroupLive = HttpApiBuilder.group(ApiContract, "todos", (handlers) =>
   handlers
     .handle("list", () => Effect.flatMap(TodosService, (s) => s.list))
-    .handle("getById", ({ path }) => Effect.flatMap(TodosService, (s) => s.getById(path.id)))
+    .handle("getById", ({ params }) => Effect.flatMap(TodosService, (s) => s.getById(params.id)))
     .handle("create", ({ payload }) => Effect.flatMap(TodosService, (s) => s.create(payload))),
 );
 
-// TodosService is NOT provided here — it comes from the runtime
-export const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(Layer.provide(TodosGroupLive));
+// HttpApiBuilder.layer registers the implemented groups with the HttpRouter.
+// Provide each group layer (and any middleware layers) to it via provideMerge.
+// TodosService is NOT provided here — it comes from the runtime.
+export const ApiImplLive = HttpApiBuilder.layer(ApiContract).pipe(
+  Layer.provideMerge(TodosGroupLive),
+);
 ```
 
-### 3. Shared API client tag
+### 3. Shared API client key
 
-Create the shared `Context.Tag`. This is the only thing imported by both server and client runtimes. It must not import any server-only code.
+Create the shared `Context.Service` key. This is the only thing imported by both server and client runtimes. It must not import any server-only code.
 
 ```ts
 // src/services/api-client-tag.ts
@@ -112,11 +140,11 @@ The `.server.ts` suffix is important — TanStack Start's [import protection](ht
 
 ```ts
 // src/runtimes/server-runtime.server.ts
-import { makeSsrApiClientLayer, mountApi } from "effect-tanstack-start/server";
 import { Layer, Logger, ManagedRuntime } from "effect";
+import { makeSsrApiClientLayer, mountApi } from "effect-tanstack-start/server";
 import { ApiContract } from "@/api/api-contract";
 import { ApiImplLive } from "@/api/api-impl";
-import { TodosService } from "@/services/todos-service";
+import { TodosServiceLive } from "@/services/todos-service";
 import { ApiClient } from "@/services/api-client-tag";
 
 // SSR client — calls handlers directly, no HTTP.
@@ -128,8 +156,8 @@ const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClie
 // HTTP handler (mountApi) share the same instances.
 export const serverRuntime = ManagedRuntime.make(
   SsrApiClientLive.pipe(
-    Layer.provideMerge(TodosService.Default),
-    Layer.provideMerge(Logger.pretty),
+    Layer.provideMerge(TodosServiceLive),
+    Layer.provideMerge(Logger.layer([Logger.consolePretty()])),
   ),
 );
 
@@ -144,15 +172,17 @@ export const apiHandler = mountApi(ApiContract, {
 
 ```ts
 // src/runtimes/client-runtime.ts
-import { makeHttpApiClientLayer } from "effect-tanstack-start/client";
 import { Layer, Logger, ManagedRuntime } from "effect";
+import { makeHttpApiClientLayer } from "effect-tanstack-start/client";
 import { ApiContract } from "@/api/api-contract";
 import { ApiClient } from "@/services/api-client-tag";
 
 // HTTP client — makes fetch requests to the API splat route
 const HttpApiClientLive = makeHttpApiClientLayer(ApiContract, ApiClient);
 
-export const clientRuntime = ManagedRuntime.make(Layer.mergeAll(HttpApiClientLive, Logger.pretty));
+export const clientRuntime = ManagedRuntime.make(
+  Layer.mergeAll(HttpApiClientLive, Logger.layer([Logger.consolePretty()])),
+);
 ```
 
 ### 6. Isomorphic runtime getter
@@ -231,9 +261,11 @@ const addTodo = async (title: string) => {
 };
 
 const deleteTodo = async (id: string) => {
-  await callApiPromise((api) => api.todos.remove({ path: { id } }));
+  await callApiPromise((api) => api.todos.remove({ params: { id } }));
 };
 ```
+
+> **Effect v4 call-site naming:** path parameters are passed as `{ params }` (v3 used `path`), query string params are `{ query }` (v3 used `urlParams`). `payload` and `headers` are unchanged.
 
 ### Using Effect composition
 
@@ -283,7 +315,34 @@ Child routes under `_authed/` are automatically protected — no per-route auth 
 
 The SSR client automatically forwards browser request headers (cookies, Authorization tokens) to your Effect `HttpApi` middleware. This is done internally via TanStack Start's `getRequestHeaders()` — no configuration needed.
 
-Define auth middleware in your API contract using `HttpApiSecurity` and `HttpApiMiddleware.Tag`, implement the handler, and both SSR and HTTP paths will run the same auth pipeline.
+In Effect v4, define auth middleware with `HttpApiMiddleware.Service` and security with `HttpApiSecurity`. The middleware implementation wraps the inner endpoint effect:
+
+```ts
+import { Layer, Redacted } from "effect";
+import { HttpApiMiddleware } from "effect/unstable/httpapi";
+
+export class AuthMiddleware extends HttpApiMiddleware.Service<
+  AuthMiddleware,
+  { provides: CurrentSession }
+>()("AuthMiddleware", {
+  error: Unauthorized,
+  security: { session: sessionSecurity },
+}) {}
+
+export const AuthMiddlewareLive = Layer.effect(AuthMiddleware)(
+  Effect.gen(function* () {
+    const store = yield* SessionStore;
+    return {
+      session: (httpEffect, { credential }) =>
+        Effect.gen(function* () {
+          const session = yield* store.get(Redacted.value(credential));
+          if (!session) return yield* new Unauthorized();
+          return yield* Effect.provideService(httpEffect, CurrentSession, session);
+        }),
+    };
+  }),
+);
+```
 
 See the [example app](apps/example/) for a complete auth implementation with cookie-based sessions, login/logout, and protected routes.
 
@@ -297,9 +356,9 @@ Integration with [`effect-query`](https://github.com/voidhashcom/effect-query) i
 
 #### `makeApiClientTag(api)`
 
-Creates a `Context.Tag` typed from your `HttpApi` contract. The tag's service type is the full `HttpApiClient.Client` shape with typed errors per endpoint.
+Creates a `Context.Service` key typed from your `HttpApi` contract. The service shape is the full `HttpApiClient.Client` shape with typed errors per endpoint.
 
-Both `makeSsrApiClientLayer` and `makeHttpApiClientLayer` provide this tag with different implementations.
+Both `makeSsrApiClientLayer` and `makeHttpApiClientLayer` provide this key with different implementations.
 
 #### `makeCallApiPromise(clientTag, getRuntime, options?)`
 
@@ -337,6 +396,8 @@ const session = await callApiPromise((api) => api.auth.me(), {
 });
 ```
 
+> **Effect v4 note:** when no handler matches, the library throws `Cause.squash(cause)` — typically the underlying error object — instead of the v3 `Runtime.FiberFailure` wrapper. Catch with `instanceof` or check `_tag`.
+
 #### `makeHttpApiClientLayer(api, clientTag, options?)`
 
 Creates a `Layer` that provides the `ApiClient` via HTTP `fetch`. Use this in your client runtime.
@@ -364,7 +425,7 @@ type MyClient = ClientOf<typeof ApiContract>;
 
 Creates a `Layer` that provides the `ApiClient` via direct handler invocation. Use this in your server runtime for zero-overhead SSR.
 
-Internally, it builds the full API Layer runtime, extracts the `HttpRouter`, and creates endpoint functions that call route handlers directly — same pipeline (schema decoding, middleware, business logic, response encoding) minus HTTP transport.
+Internally, it builds the user's composed API layer, reads each group's routes directly from the built context (the v4 group layer stores `{ routes }` per group key), and creates endpoint functions that invoke each route's handler Effect with a minimal request context — same pipeline (schema decoding, middleware, business logic, response encoding) minus HTTP transport.
 
 Browser request headers are automatically forwarded to middleware via `getRequestHeaders()` from `@tanstack/react-start/server`.
 
@@ -383,15 +444,15 @@ Services backed by mutable state (`Ref`, in-memory stores, database connections)
 
 ```ts
 // Wrong — creates separate instances for SSR and HTTP
-const ApiImplLive = HttpApiBuilder.api(ApiContract).pipe(
-  Layer.provide(TodosGroupLive),
-  Layer.provide(TodosService.Default), // new Ref created here
+const ApiImplLive = HttpApiBuilder.layer(ApiContract).pipe(
+  Layer.provideMerge(TodosGroupLive),
+  Layer.provideMerge(TodosServiceLive), // new Ref created here
 );
 
 // Right — runtime provides stateful services, both paths share them
 const ServerLayer = SsrApiClientLive.pipe(
-  Layer.provideMerge(TodosService.Default), // single Ref instance
-  Layer.provideMerge(Logger.pretty),
+  Layer.provideMerge(TodosServiceLive), // single Ref instance
+  Layer.provideMerge(Logger.layer([Logger.consolePretty()])),
 );
 ```
 
@@ -400,7 +461,7 @@ const ServerLayer = SsrApiClientLive.pipe(
 TanStack Start route files are loaded in both server and client environments. The library relies on TanStack Start's [import protection](https://tanstack.com/router/latest/docs/start/framework/react/guide/import-protection) to keep server code out of the client bundle:
 
 - **`server-runtime.server.ts`** — the `.server.ts` suffix triggers import protection. This file is automatically excluded from the client bundle.
-- **`api-client-tag.ts`** — only contains the shared tag. Safe for both environments.
+- **`api-client-tag.ts`** — only contains the shared key. Safe for both environments.
 - **`get-runtime.ts`** — statically imports `server-runtime.server.ts`, but import protection mocks it on the client side.
 - **`api.$.ts`** — imports `apiHandler` from the `.server.ts` file. Same protection applies.
 

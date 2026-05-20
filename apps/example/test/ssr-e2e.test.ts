@@ -1,51 +1,73 @@
 import { expect, layer } from "@effect/vitest";
-import { Command, FetchHttpClient, HttpClient } from "@effect/platform";
-import { NodeContext } from "@effect/platform-node";
 import { Context, Effect, Layer, Schedule } from "effect";
+import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { NodeServices } from "@effect/platform-node";
 
 const PORT = 3456;
 const BASE_URL = `http://localhost:${PORT}`;
 const APP_DIR = import.meta.dirname + "/..";
 
-const killPort = Command.make("sh", "-c", `lsof -t -i:${PORT} | xargs -r kill -9`).pipe(
-  Command.exitCode,
-  Effect.ignore,
-);
+// Note: `ChildProcess.make(...)` is itself an Effect that, when yielded inside a
+// scope, spawns the process and returns a `ChildProcessHandle`. We use the
+// `ChildProcessSpawner.exitCode` helper for fire-and-forget commands where we
+// only care about the exit code, and `yield*` directly for the long-running
+// server so we can keep a handle for the finalizer.
+
+const killPort = Effect.gen(function* () {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  yield* spawner.exitCode(
+    ChildProcess.make("sh", ["-c", `lsof -t -i:${PORT} | xargs -r kill -9`], {
+      stdout: "ignore",
+      stderr: "ignore",
+    }),
+  );
+}).pipe(Effect.ignore);
 
 const build = Effect.gen(function* () {
-  const exitCode = yield* Command.make("vp", "build").pipe(
-    Command.workingDirectory(APP_DIR),
-    Command.env({ VITEST: "", NODE_ENV: "production" }),
-    Command.stdout("inherit"),
-    Command.stderr("inherit"),
-    Command.exitCode,
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const exitCode = yield* spawner.exitCode(
+    ChildProcess.make("vp", ["build"], {
+      cwd: APP_DIR,
+      env: { VITEST: "", NODE_ENV: "production" },
+      extendEnv: true,
+      stdout: "inherit",
+      stderr: "inherit",
+    }),
   );
   if (exitCode !== 0) return yield* Effect.die(`Build failed with exit code ${exitCode}`);
 });
 
-class TestServer extends Context.Tag("TestServer")<TestServer, { readonly baseUrl: string }>() {}
+class TestServer extends Context.Service<TestServer, { readonly baseUrl: string }>()(
+  "TestServer",
+) {}
 
-const TestServerLive = Layer.scoped(
-  TestServer,
+const TestServerLive = Layer.effect(TestServer)(
   Effect.gen(function* () {
     yield* killPort;
     yield* build;
 
-    const server = yield* Command.make("node", ".output/server/index.mjs").pipe(
-      Command.workingDirectory(APP_DIR),
-      Command.env({ PORT: String(PORT) }),
-      Command.stdout("inherit"),
-      Command.stderr("inherit"),
-      Command.start,
-    );
+    // Yielding the Command spawns the process within the current Scope; the
+    // process is automatically cleaned up when the scope closes, but we add a
+    // SIGKILL finalizer as a belt-and-suspenders since the spawner uses SIGTERM
+    // by default and the production server can be slow to shut down.
+    const handle = yield* ChildProcess.make("node", [".output/server/index.mjs"], {
+      cwd: APP_DIR,
+      env: { PORT: String(PORT) },
+      extendEnv: true,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
 
-    yield* Effect.addFinalizer(() => server.kill("SIGKILL").pipe(Effect.ignore));
+    yield* Effect.addFinalizer(() => handle.kill({ killSignal: "SIGKILL" }).pipe(Effect.ignore));
 
     const client = yield* HttpClient.HttpClient;
 
     yield* client
       .get(BASE_URL)
-      .pipe(Effect.retry(Schedule.addDelay(Schedule.recurs(30), () => "500 millis")));
+      .pipe(
+        Effect.retry(Schedule.addDelay(Schedule.recurs(30), () => Effect.succeed("500 millis"))),
+      );
 
     return { baseUrl: BASE_URL };
   }),
@@ -53,7 +75,7 @@ const TestServerLive = Layer.scoped(
 
 const TestLayer = TestServerLive.pipe(
   Layer.provideMerge(FetchHttpClient.layer),
-  Layer.provideMerge(NodeContext.layer),
+  Layer.provideMerge(NodeServices.layer),
 );
 
 layer(TestLayer, { timeout: "120 seconds", excludeTestServices: true })("SSR", (it) => {
@@ -102,13 +124,15 @@ layer(TestLayer, { timeout: "120 seconds", excludeTestServices: true })("SSR", (
 
   it.effect("client bundle does not contain server-only code", () =>
     Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const clientDir = `${APP_DIR}/.output/public/assets`;
-      const exitCode = yield* Command.make(
-        "grep",
-        "-r",
-        "SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET",
-        clientDir,
-      ).pipe(Command.exitCode);
+      const exitCode = yield* spawner.exitCode(
+        ChildProcess.make(
+          "grep",
+          ["-r", "SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET_SUPER_SECRET", clientDir],
+          { stdout: "ignore", stderr: "ignore" },
+        ),
+      );
 
       expect(exitCode).toBe(1); // 1 = no matches found
     }),

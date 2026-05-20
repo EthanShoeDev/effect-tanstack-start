@@ -1,14 +1,14 @@
 /**
  * Creates a convenience helper for calling the API client isomorphically.
  *
- * Picks the correct runtime (server or client), yields the ApiClient tag,
+ * Picks the correct runtime (server or client), yields the ApiClient key,
  * passes it to your callback, and runs the resulting Effect as a Promise.
  *
  * Supports typesafe error mapping via `throwOnTag` — both at factory time
  * (global defaults) and per-call (endpoint-specific overrides).
  */
 
-import { Cause, Context, Effect, Exit, Option, Runtime, type ManagedRuntime } from "effect";
+import { Cause, type Context, Effect, Exit, Option, type ManagedRuntime } from "effect";
 import type { AllClientErrors } from "./internal/types.js";
 
 /**
@@ -26,7 +26,7 @@ type ThrowOnTagOption<E> = {
  * Create a `callApiPromise` function that picks the right runtime,
  * resolves the ApiClient, and runs the effect.
  *
- * @param clientTag - The ApiClient tag (from makeApiClientTag)
+ * @param clientTag - The ApiClient key (from makeApiClientTag)
  * @param getRuntime - An isomorphic function returning the correct runtime
  *   (may return the runtime directly or a Promise of it)
  * @param options - Optional factory-level configuration
@@ -46,7 +46,7 @@ type ThrowOnTagOption<E> = {
  *
  * // In a loader — TodoNotFound is automatically mapped, abort on navigation:
  * const todo = await callApiPromise(
- *   (api) => api.todos.getById({ path: { id } }),
+ *   (api) => api.todos.getById({ params: { id } }),
  *   { signal: abortController.signal },
  * )
  *
@@ -58,7 +58,7 @@ type ThrowOnTagOption<E> = {
  * ```
  */
 export function makeCallApiPromise<TagId, TagService>(
-  clientTag: Context.Tag<TagId, TagService>,
+  clientTag: Context.Service<TagId, TagService>,
   getRuntime: () =>
     | ManagedRuntime.ManagedRuntime<any, any>
     | Promise<ManagedRuntime.ManagedRuntime<any, any>>,
@@ -95,7 +95,7 @@ export function makeCallApiPromise<TagId, TagService>(
 
       // Failure path — extract the error from the Cause
       const cause = exit.cause;
-      const failureOpt = Cause.failureOption(cause);
+      const failureOpt = Cause.findErrorOption(cause);
 
       if (Option.isSome(failureOpt)) {
         const error = failureOpt.value;
@@ -117,8 +117,10 @@ export function makeCallApiPromise<TagId, TagService>(
         }
       }
 
-      // No handler matched — throw FiberFailure (same as runPromise behavior)
-      throw Runtime.makeFiberFailure(cause);
+      // No handler matched — squash the cause into a throwable.
+      // v4 removed Runtime.makeFiberFailure; Cause.squash collapses to a single
+      // value (first Fail error, then first Die defect, else interrupt sentinel).
+      throw Cause.squash(cause);
     };
 
     if (runtimeOrPromise instanceof Promise) {

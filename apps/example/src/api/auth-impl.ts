@@ -6,8 +6,9 @@
  * No password required.
  */
 
-import { HttpApiBuilder, HttpApp, HttpServerResponse } from "@effect/platform";
 import { Effect, Layer, Redacted } from "effect";
+import { HttpEffect, HttpServerResponse } from "effect/unstable/http";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
 import {
   ApiContract,
   AuthMiddleware,
@@ -21,14 +22,16 @@ import { TodosService } from "../services/todos-service";
 
 // ── Auth Middleware Implementation ─────────────────────────────────────
 
-export const AuthMiddlewareLive = Layer.effect(
-  AuthMiddleware,
+// v4 security middleware wraps the inner endpoint effect. We decode the credential,
+// look up the session, fail with Unauthorized if missing, and otherwise provide
+// CurrentSession before running the wrapped effect.
+export const AuthMiddlewareLive = Layer.effect(AuthMiddleware)(
   Effect.gen(function* () {
     const store = yield* SessionStore;
-    return AuthMiddleware.of({
-      session: (token) =>
+    return {
+      session: (httpEffect, { credential }) =>
         Effect.gen(function* () {
-          const tokenStr = Redacted.value(token);
+          const tokenStr = Redacted.value(credential);
           const allTokens = yield* store.keys;
           yield* Effect.log(
             `Auth middleware: incoming token="${tokenStr}", stored tokens=[${allTokens.join(", ")}]`,
@@ -37,15 +40,15 @@ export const AuthMiddlewareLive = Layer.effect(
           if (!session) {
             return yield* new Unauthorized();
           }
-          return session;
+          return yield* Effect.provideService(httpEffect, CurrentSession, session);
         }),
-    });
+    };
   }),
 );
 
 // ── Auth Group Handlers ────────────────────────────────────────────────
 
-const AuthGroupLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
+export const AuthGroupLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
   handlers
     .handle("login", ({ payload }) =>
       Effect.gen(function* () {
@@ -69,8 +72,8 @@ const AuthGroupLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
       }),
     )
     .handle("logout", () =>
-      HttpApp.appendPreResponseHandler((_req, response) =>
-        Effect.succeed(HttpServerResponse.expireCookie(response, "session", { path: "/" })),
+      HttpEffect.appendPreResponseHandler((_req, response) =>
+        Effect.succeed(HttpServerResponse.expireCookieUnsafe(response, "session", { path: "/" })),
       ),
     )
     .handle("me", () => CurrentSession),
@@ -78,7 +81,7 @@ const AuthGroupLive = HttpApiBuilder.group(ApiContract, "auth", (handlers) =>
 
 // ── Dashboard Group Handlers ───────────────────────────────────────────
 
-const DashboardGroupLive = HttpApiBuilder.group(ApiContract, "dashboard", (handlers) =>
+export const DashboardGroupLive = HttpApiBuilder.group(ApiContract, "dashboard", (handlers) =>
   handlers.handle("stats", () =>
     Effect.gen(function* () {
       const session = yield* CurrentSession;
@@ -93,7 +96,3 @@ const DashboardGroupLive = HttpApiBuilder.group(ApiContract, "dashboard", (handl
     }),
   ),
 );
-
-// ── Exports ────────────────────────────────────────────────────────────
-
-export { AuthGroupLive, DashboardGroupLive };

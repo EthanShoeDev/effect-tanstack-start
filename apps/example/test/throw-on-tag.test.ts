@@ -1,21 +1,30 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Layer, Logger, ManagedRuntime, Runtime } from "effect";
+import { Layer, Logger, ManagedRuntime } from "effect";
 import { makeApiClientTag, makeCallApiPromise } from "effect-tanstack-start/client";
 import { makeSsrApiClientLayer } from "effect-tanstack-start/server";
-import { ApiContract, TodoNotFound } from "@/api/api-contract";
+import { ApiContract } from "@/api/api-contract";
 import { ApiImplLive } from "@/api/api-impl";
-import { SessionStore } from "@/services/session-store";
-import { TodosService } from "@/services/todos-service";
+import { SessionStoreLive } from "@/services/session-store";
+import { TodosServiceLive } from "@/services/todos-service";
 
 const ApiClient = makeApiClientTag(ApiContract);
 const SsrApiClientLive = makeSsrApiClientLayer(ApiContract, ApiImplLive, ApiClient);
 const TestLayer = SsrApiClientLive.pipe(
-  Layer.provideMerge(TodosService.Default),
-  Layer.provideMerge(SessionStore.Default),
-  Layer.provideMerge(Logger.pretty),
+  Layer.provideMerge(TodosServiceLive),
+  Layer.provideMerge(SessionStoreLive),
+  Layer.provideMerge(Logger.layer([Logger.consolePretty()])),
 );
 
 const testRuntime = ManagedRuntime.make(TestLayer);
+
+/**
+ * v4 helper: callApiPromise rethrows whatever `Cause.squash` produces for
+ * unmapped failures. For a tagged Fail cause, that's the underlying error
+ * object — so unhandled errors surface as instances of the typed error class
+ * rather than the v3 `FiberFailure` wrapper.
+ */
+const isTaggedError = (tag: string) => (error: unknown) =>
+  typeof error === "object" && error !== null && (error as { _tag?: string })._tag === tag;
 
 describe("throwOnTag", () => {
   describe("global throwOnTag", () => {
@@ -34,13 +43,13 @@ describe("throwOnTag", () => {
 
     it("throws the handler's return value when a global tag matches", async () => {
       await expect(
-        callApi((api) => api.todos.getById({ path: { id: "nonexistent" } })),
+        callApi((api) => api.todos.getById({ params: { id: "nonexistent" } })),
       ).rejects.toBe(NOT_FOUND_SIGNAL);
     });
 
-    it("throws FiberFailure for unhandled errors", async () => {
-      await expect(callApi((api) => api.auth.me())).rejects.toSatisfy((error) =>
-        Runtime.isFiberFailure(error),
+    it("rethrows the squashed cause for unhandled errors", async () => {
+      await expect(callApi((api) => api.auth.me())).rejects.toSatisfy(
+        isTaggedError("Unauthorized"),
       );
     });
   });
@@ -62,8 +71,8 @@ describe("throwOnTag", () => {
 
     it("does not intercept errors without a per-call handler", async () => {
       await expect(
-        callApi((api) => api.todos.getById({ path: { id: "nonexistent" } })),
-      ).rejects.toSatisfy((error) => Runtime.isFiberFailure(error));
+        callApi((api) => api.todos.getById({ params: { id: "nonexistent" } })),
+      ).rejects.toSatisfy(isTaggedError("TodoNotFound"));
     });
   });
 
@@ -79,7 +88,7 @@ describe("throwOnTag", () => {
 
     it("per-call handler wins over global for the same tag", async () => {
       await expect(
-        callApi((api) => api.todos.getById({ path: { id: "nonexistent" } }), {
+        callApi((api) => api.todos.getById({ params: { id: "nonexistent" } }), {
           throwOnTag: {
             TodoNotFound: () => PER_CALL_SIGNAL,
           },
@@ -91,10 +100,10 @@ describe("throwOnTag", () => {
   describe("handler receives the typed error", () => {
     const callApi = makeCallApiPromise(ApiClient, () => testRuntime);
 
-    it("passes the error instance to the handler", async () => {
+    it("passes the typed error payload to the handler", async () => {
       let capturedError: unknown;
 
-      await callApi((api) => api.todos.getById({ path: { id: "missing-123" } }), {
+      await callApi((api) => api.todos.getById({ params: { id: "missing-123" } }), {
         throwOnTag: {
           TodoNotFound: (error) => {
             capturedError = error;
@@ -103,8 +112,14 @@ describe("throwOnTag", () => {
         },
       }).catch(() => {});
 
-      expect(capturedError).toBeInstanceOf(TodoNotFound);
-      expect((capturedError as TodoNotFound).id).toBe("missing-123");
+      // In v4 the SSR path goes through the same response-encoding pipeline as the HTTP
+      // path: the handler encodes the error to a JSON response body, and we re-decode
+      // it on the way back. That gives us the same `_tag` + fields, but as a plain
+      // object rather than a `TodoNotFound` class instance. We intentionally don't
+      // schema-decode (we don't have a schema reference here and the values were
+      // already validated server-side), so the contract for `throwOnTag` is "you get
+      // the tagged error payload" — not "you get an `instanceof` of the error class".
+      expect(capturedError).toMatchObject({ _tag: "TodoNotFound", id: "missing-123" });
     });
   });
 });

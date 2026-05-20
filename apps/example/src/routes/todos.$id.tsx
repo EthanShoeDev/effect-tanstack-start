@@ -4,7 +4,7 @@ import { callApiPromise } from "@/runtimes/get-runtime";
 
 export const Route = createFileRoute("/todos/$id")({
   loader: ({ params, abortController }) =>
-    callApiPromise((api) => api.todos.getById({ path: { id: params.id } }), {
+    callApiPromise((api) => api.todos.getById({ params: { id: params.id } }), {
       signal: abortController.signal,
     }),
   notFoundComponent: () => (

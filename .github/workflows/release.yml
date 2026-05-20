@@ -4,8 +4,22 @@ on:
   push:
     branches:
       - main
+      - effect-v4
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+# Single workflow for both release lines. npm's trusted-publisher config is
+# keyed on a single workflow filename, so we route everything through this
+# file instead of a separate release-v4.yml.
+#
+# Branch-specific behavior is driven entirely by per-branch state in git:
+#
+#   - On `main` push: no `.changeset/pre.json`, no `--tag` → `changeset publish`
+#     uses the `latest` npm dist-tag for 0.x (Effect v3) releases.
+#   - On `effect-v4` push: `.changeset/pre.json` is present (pre mode, tag =
+#     "beta"), so `changeset publish` automatically uses the `beta` dist-tag
+#     for 1.0.0-beta.N (Effect v4) releases. Passing `--tag` here would error
+#     ("Releasing under custom tag is not allowed in pre mode").
 
 permissions:
   contents: write

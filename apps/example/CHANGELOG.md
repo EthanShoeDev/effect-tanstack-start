@@ -1,5 +1,12 @@
 # example
 
+## 0.0.3-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`87cceaa`](https://github.com/EthanShoeDev/effect-tanstack-start/commit/87cceaa51b7069eb78b2d79551719ca7ea32420e)]:
+  - effect-tanstack-start@1.0.0-beta.0
+
 ## 0.0.2
 
 ### Patch Changes

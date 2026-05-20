@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - effect-v4
   pull_request:
     branches:
       - main
+      - effect-v4
 
 jobs:
   check:

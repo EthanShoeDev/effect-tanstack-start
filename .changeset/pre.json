@@ -5,5 +5,5 @@
     "example": "0.0.2",
     "effect-tanstack-start": "0.2.0"
   },
-  "changesets": []
+  "changesets": ["effect-v4-major"]
 }

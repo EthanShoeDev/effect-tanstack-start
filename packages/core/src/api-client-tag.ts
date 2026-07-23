@@ -26,14 +26,10 @@ import type { ClientOf } from "./internal/types.js";
  * export const ApiClient = makeApiClientTag(ApiContract)
  * ```
  */
-export function makeApiClientTag<ApiId extends string, Groups extends HttpApiGroup.Any>(
+export function makeApiClientTag<ApiId extends string, Groups extends HttpApiGroup.Constraint>(
   api: HttpApi.HttpApi<ApiId, Groups>,
-): Context.Service<
-  `effect-tanstack-start/ApiClient/${ApiId}`,
-  ClientOf<HttpApi.HttpApi<ApiId, Groups>>
-> {
-  return Context.Service<
-    `effect-tanstack-start/ApiClient/${ApiId}`,
-    ClientOf<HttpApi.HttpApi<ApiId, Groups>>
-  >(`effect-tanstack-start/ApiClient/${api.identifier}`);
+): Context.Service<`effect-tanstack-start/ApiClient/${ApiId}`, ClientOf<Groups>> {
+  return Context.Service<`effect-tanstack-start/ApiClient/${ApiId}`, ClientOf<Groups>>(
+    `effect-tanstack-start/ApiClient/${api.identifier}`,
+  );
 }

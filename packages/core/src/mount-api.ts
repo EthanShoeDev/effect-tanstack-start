@@ -49,7 +49,7 @@ export interface MountApiOptions {
  * })
  * ```
  */
-export function mountApi<ApiId extends string, Groups extends HttpApiGroup.Any>(
+export function mountApi<ApiId extends string, Groups extends HttpApiGroup.Constraint>(
   _api: HttpApi.HttpApi<ApiId, Groups>,
   options: MountApiOptions,
 ): (args: { request: Request }) => Promise<Response> {

@@ -54,10 +54,10 @@ type SsrServerRequest = Pick<
 >;
 
 /** Properties we read from endpoints via HttpApi.reflect */
-type ReflectedEndpoint = Pick<HttpApiEndpoint.AnyWithProps, "name" | "method" | "path">;
+type ReflectedEndpoint = Pick<HttpApiEndpoint.Top, "identifier" | "method" | "path">;
 
 /** Properties we read from groups via HttpApi.reflect */
-type ReflectedGroup = Pick<HttpApiGroup.AnyWithProps, "identifier" | "topLevel" | "key">;
+type ReflectedGroup = Pick<HttpApiGroup.Top, "identifier" | "topLevel" | "key">;
 
 /** Request shape that the generated client passes to endpoint functions */
 interface EndpointRequest {
@@ -184,7 +184,7 @@ interface GroupContextEntry {
  */
 export function makeSsrApiClientLayer<
   ApiId extends string,
-  Groups extends HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint,
   ImplOut,
   ImplErr,
   ImplIn,
@@ -242,19 +242,13 @@ export function makeSsrApiClientLayer<
       | ((req?: EndpointRequest) => Effect.Effect<unknown, unknown>)
     > = {};
 
-    HttpApi.reflect(api as unknown as HttpApi.AnyWithProps, {
+    HttpApi.reflect(api as unknown as HttpApi.Top, {
       onGroup({ group }: { group: ReflectedGroup }) {
         if (!group.topLevel) {
           client[group.identifier] = {};
         }
       },
-      onEndpoint({
-        endpoint,
-        group,
-      }: {
-        endpoint: HttpApiEndpoint.AnyWithProps;
-        group: ReflectedGroup;
-      }) {
+      onEndpoint({ endpoint, group }: { endpoint: HttpApiEndpoint.Top; group: ReflectedGroup }) {
         const ep: ReflectedEndpoint = endpoint;
         const route = routeIndex.get(`${ep.method} ${ep.path}`);
         if (route === undefined) {
@@ -320,14 +314,14 @@ export function makeSsrApiClientLayer<
           });
 
         if (group.topLevel) {
-          client[ep.name] = endpointFn;
+          client[ep.identifier] = endpointFn;
         } else {
           (
             client[group.identifier] as Record<
               string,
               (req?: EndpointRequest) => Effect.Effect<unknown, unknown>
             >
-          )[ep.name] = endpointFn;
+          )[ep.identifier] = endpointFn;
         }
       },
     });

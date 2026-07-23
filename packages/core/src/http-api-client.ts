@@ -27,7 +27,7 @@ import { HttpApiClient } from "effect/unstable/httpapi";
  */
 export function makeHttpApiClientLayer<
   ApiId extends string,
-  Groups extends HttpApiGroup.Any,
+  Groups extends HttpApiGroup.Constraint,
   ClientTag extends Context.Service<any, any>,
 >(
   api: HttpApi.HttpApi<ApiId, Groups>,

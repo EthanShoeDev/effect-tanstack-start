@@ -9,17 +9,21 @@ import { type Context, Effect, Layer, type ManagedRuntime } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 
-export interface MountApiOptions {
+export interface MountApiOptions<
+  R = never,
+  ER = never,
+  ImplOut = unknown,
+  ImplErr = unknown,
+  ImplIn = never,
+> {
   /** The server ManagedRuntime. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required for ManagedRuntime variance
-  readonly serverRuntime: ManagedRuntime.ManagedRuntime<any, any>;
+  readonly serverRuntime: ManagedRuntime.ManagedRuntime<R, ER>;
   /**
    * The composed API implementation Layer. Should include `HttpApiBuilder.layer(api)`
    * merged with your group layers, e.g.
    * `Layer.mergeAll(HttpApiBuilder.layer(Contract), TodosGroupLive)`.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- required for Layer variance
-  readonly apiLayer: Layer.Layer<any, any, any>;
+  readonly apiLayer: Layer.Layer<ImplOut, ImplErr, ImplIn>;
 }
 
 /**
@@ -49,16 +53,24 @@ export interface MountApiOptions {
  * })
  * ```
  */
-export function mountApi<ApiId extends string, Groups extends HttpApiGroup.Constraint>(
+export function mountApi<
+  ApiId extends string,
+  Groups extends HttpApiGroup.Constraint,
+  R,
+  ER,
+  ImplOut,
+  ImplErr,
+  ImplIn,
+>(
   _api: HttpApi.HttpApi<ApiId, Groups>,
-  options: MountApiOptions,
+  options: MountApiOptions<R, ER, ImplOut, ImplErr, ImplIn>,
 ): (args: { request: Request }) => Promise<Response> {
   // Build ServerEnvLayer internally — exposes the runtime's context to the
   // HttpApi handlers so services (e.g. TodosService) come from the runtime
   // without being built a second time.
   const serverEnvLayer = Layer.effectContext(
     options.serverRuntime.contextEffect.pipe(
-      Effect.map((ctx: Context.Context<unknown>) => ctx as Context.Context<never>),
+      Effect.map((ctx) => ctx as unknown as Context.Context<never>),
     ),
   );
 

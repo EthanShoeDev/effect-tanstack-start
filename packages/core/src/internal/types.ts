@@ -4,7 +4,7 @@
  */
 
 import type { Effect } from "effect";
-import type { HttpApiClient, HttpApiGroup } from "effect/unstable/httpapi";
+import type { HttpApi, HttpApiClient, HttpApiGroup } from "effect/unstable/httpapi";
 
 /**
  * Derives the full typed client from an HttpApi definition's group union.
@@ -15,6 +15,17 @@ export type ClientOf<Groups extends HttpApiGroup.Constraint> = HttpApiClient.Cli
   never,
   never
 >;
+
+/**
+ * Derives the full typed client directly from an `HttpApi` contract (rather
+ * than its group union) — the ergonomic entry point for callers who only
+ * have `typeof MyApiContract` on hand and would otherwise have to extract
+ * `Groups` themselves via `Api extends HttpApi.HttpApi<string, infer Groups> ? Groups : never`.
+ */
+export type ClientOfApi<Api> =
+  Api extends HttpApi.HttpApi<string, infer Groups extends HttpApiGroup.Constraint>
+    ? ClientOf<Groups>
+    : never;
 
 // ── Error extraction from Client shape ────────────────────────────────
 

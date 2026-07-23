@@ -2,7 +2,7 @@
  * effect-tanstack-start/client
  *
  * Client-safe exports. No server-only imports.
- * Also re-exports shared utilities (makeApiClientTag, makeCallApiPromise, ClientOf).
+ * Also re-exports shared utilities (makeApiClientTag, makeCallApiPromise, ClientOfApi).
  */
 
 export { makeApiClientTag } from "./api-client-tag.js";
@@ -13,4 +13,5 @@ export type {
   ClientErrorByTag,
   ClientErrorTags,
   ClientOf,
+  ClientOfApi,
 } from "./internal/types.js";

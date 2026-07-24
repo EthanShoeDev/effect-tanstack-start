@@ -5,5 +5,5 @@
     "example": "0.0.2",
     "effect-tanstack-start": "0.2.0"
   },
-  "changesets": ["effect-v4-major", "gentle-eels-relax", "tame-plums-guess"]
+  "changesets": ["effect-v4-major", "gentle-eels-relax", "soft-pandas-shave", "tame-plums-guess"]
 }

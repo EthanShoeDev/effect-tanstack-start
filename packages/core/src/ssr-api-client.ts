@@ -74,9 +74,12 @@ interface EndpointRequest {
 const getForwardedHeaders: Effect.Effect<Record<string, string>> = Effect.try({
   try: () => {
     const raw = getRequestHeaders();
+    // `@tanstack/react-start@1.163+` types `getRequestHeaders()` as
+    // `TypedHeaders<RequestHeaderMap>` (fetchdts), which no longer overlaps
+    // `Record<string, string>` for a direct cast — go through `unknown`.
     return raw instanceof globalThis.Headers
       ? Object.fromEntries(raw.entries())
-      : ((raw ?? {}) as Record<string, string>);
+      : ((raw ?? {}) as unknown as Record<string, string>);
   },
   catch: () => ({}) as Record<string, string>,
 }).pipe(Effect.catch(() => Effect.succeed({} as Record<string, string>)));
